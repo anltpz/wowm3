@@ -1,0 +1,39 @@
+[package]
+name = "azeroth-metin"
+version = "0.1.0"
+edition = "2021"
+description = "Metin2 tarzı aksiyon RPG — WoW 1.12 assetleri (AzerothSurvivors MPQ) + benilla-world motoru"
+
+[dependencies]
+bevy = { version = "0.18.1", default-features = false, features = [
+    "default_app",
+    "default_platform",
+    "2d_bevy_render",
+    "3d_bevy_render",
+    "ui_api",
+    "ui_bevy_render",
+    "scene",
+    "picking",
+    "debug",
+] }
+avian3d = "0.6"
+benilla-world = { git = "https://github.com/samwhosung/benilla", rev = "2af917044d25bc929ee7edab25ab0a0628c59fab", default-features = false }
+benilla-assets = { git = "https://github.com/samwhosung/benilla", rev = "2af917044d25bc929ee7edab25ab0a0628c59fab", default-features = false }
+benilla-formats = { git = "https://github.com/samwhosung/benilla", rev = "2af917044d25bc929ee7edab25ab0a0628c59fab", default-features = false }
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+ron = "0.10"
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.dev.package."*"]
+opt-level = 3
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1
+lto = "off"
+
+[profile.release]
+lto = "off"
+incremental = true
