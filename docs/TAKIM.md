@@ -25,7 +25,11 @@ PM sprinti kapatır, `PROJE_DURUMU.md`'yi günceller. PR'ı birleştirme kararı
   `px()`, `BorderColor::all`, sistem parametre sınırı 16 → tuple ile grupla, edition 2021 → let-chain yok).
 - Derleme: `cargo build --release` (ilk derleme ~4 dk). Test: `cargo test --release`.
 - Görsel doğrulama: PowerShell'de `& .\tools\shot.ps1 -Out <png> -At "25" -Env "AZM_DIST=14;AZM_AUTO=1"`.
-  Kullanışlı env: `AZM_MAPSTART=x,y` (Pyungmoo harita metresi), `AZM_MOBGAL=1`, `AZM_AUTO=1`, `AZM_YAW`, `AZM_PITCH`.
+  Kullanışlı env: `AZM_MAPSTART=x,y` (Pyungmoo harita metresi), `AZM_MOBGAL=1`, `AZM_AUTO=1`, `AZM_YAW`, `AZM_PITCH`,
+  `AZM_RIDE=1` (10 dk binekte başlar).
+- Metin + mob senaryosu (QA H7): `-At "15" -Env "AZM_MAPSTART=725,660;AZM_AUTO=1;AZM_YAW=-1.57;AZM_DIST=30"`.
+  Otopilot Sv6, oradaki moblar Sv10–15: 20 sn'den uzun çekimde oyuncu ölür. Köy meydanının 60 m çevresinde mob yok,
+  otopilot orada hedef bulamaz.
 - WoW asset yolları MPQ'da gerçekten var mı `tools/mpq_present.txt` ile kontrol et (listfile'daki ~1850 dosya yok). Yükleme: `mpq://Yol/Dosya.m2`.
 - Metin2 isimleri/seviyeleri için kaynak: tr-wiki.metin2.gameforge.com (Türkçe adlar birebir).
 - Telifli istemci dosyaları (Metin2 pack) indirilmez/kopyalanmaz; wiki görsel ve bilgileri referanstır.

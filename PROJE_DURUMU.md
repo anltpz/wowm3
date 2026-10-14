@@ -59,6 +59,9 @@ Metin2 tarzı aksiyon RPG; AzerothSurvivors'ın MPQ verisi (WoW 1.12 assetleri) 
 - [x] Binek (`mount.rs`, Sprint 2): Ölümsüz Savaş Atı (`RidingUndeadWarHorse`, kullanıcı kararı). Seyis bilet/madalyon
   verir, Ctrl+G bin/in, hız ×1.6, at üstünde saldırı yok (saldırınca iner), HUD'da süre, kayda dahil.
   Gövde atın takma noktası 0'a çocuk olarak bağlanır, "Mount" (91) animasyonu. Test: `AZM_RIDE=1`.
+- [x] QA H1-H7 (Sprint 2): bina ayak izleri artık gerçek WMO iç mekân sınırları (`terrain::BUILDINGS` `[x0,x1,z0,z1]`,
+  binanın kendi eksenlerinde; WMO kökleri bina merkezinde değil!). Kamera kolu binalara girmez (`camera_hit`),
+  plakalar bina arkasında gizli (`occluded`), garnizon doğu kapısı y 662, Yüzbaşı avluda (300, 663).
 - [ ] Sonraki: kayıt/yükleme (save.ron), +7…+9 silah parıltısı (enchant M2 / emissive), gerçek minimap
   dokuları, ses efektleri, beceri seviyeleri, parti/lonca görselleri (tasarım görselindeki sol liste).
 

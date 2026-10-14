@@ -156,3 +156,16 @@ Bilgi notları (hata değil):
 
 Kod düzeltmesi yapılmadı. Bulunan hataların hiçbiri tek satırlık ve risksiz değil: H1 için güvenli bir koordinat
 oyun içinde doğrulanmalı, H2 tasarım gerektiriyor, H8 `tools/**` altında. Bu commit yalnızca bu raporu ekliyor.
+
+## 8. Sprint 2 düzeltmeleri (2026-10-14, `sprint-2`)
+
+| # | Durum | Düzeltme | Doğrulama |
+|---|---|---|---|
+| H1 | **DÜZELDİ** | Asıl sebep: `BUILDINGS` ayak izleri elle tahmin edilmiş kutulardı ve binalardan çok küçüktü. Kışla gerçekte x 283–315, y 623–657 aralığını kaplıyor ve WMO kökü binanın dışında. Ayak izleri artık MPQ'daki WMO iç mekân grup sınırlarından alınıyor (`[x0, x1, z0, z1]`, binanın kendi eksenlerinde). Yüzbaşı kışlanın güneyindeki avluya (300, 663) taşındı. Kışla doğu kapısını kapattığı için kapı y 653'ten y 662'ye alındı. Kışlanın içinden geçen çit parçaları artık çizilmiyor. | Testler: `every_npc_has_open_spot`, `barracks_footprint_matches_visual`, `east_gate_is_south_of_barracks`. Ekran görüntüsü: Yüzbaşı doğu kapısından görünüyor, log'da WARN yok. |
+| H2 | **DÜZELDİ** | Pyungmoo'da kamera kolu bina ayak izleri (+1 m pay, çatı yüksekliği 11 m) boyunca yürütülüp kısaltılıyor (`terrain::camera_hit`). | Demirci binasına bakan kamera (386,696, yaw 0) binanın dışında kalıyor. |
+| H3 | **DÜZELDİ** | `Windows::open_shop` / `open_upgrade` tek yerde ve birbirini dışlıyor. `npc::open` ve `AZM_OPEN` bunları kullanıyor. | Derleme, kod incelemesi |
+| H4 | **DÜZELDİ** | NPC ve düşman plakaları bina arkasındaysa gizleniyor (`terrain::occluded`). Çakışan NPC plakalarından kameraya yakın olan kalıyor. Binekteyken oyuncu plakası binicinin üstüne çıkıyor. | Meydan çekiminde Işınlayıcı'nın ahırın üstündeki plakası artık yok, Demirci ve Satıcı plakaları ayrı duruyor. |
+| H5 | **DÜZELDİ** | `GameLog::say` (önek yok) NPC konuşmalarında kullanılıyor. `[Sistem]` öneki yalnızca sistem satırlarında. | Kod incelemesi (oyun içinde NPC'ye tıklanmadı) |
+| H6 | **DÜZELDİ** | `mobs::Passive` bileşeni eklendi. Galeri mobları hareket etmiyor ve saldırmıyor. | `AZM_MOBGAL=1`, 25. saniyede oyuncu canı 280/280 |
+| H7 | **BELGELENDİ** | Önerilen komut `docs/TAKIM.md`'ye yazıldı. | Yok |
+| H8 | **DÜZELDİ** (Sprint 1 son commit'i) | Yok | Yok |
