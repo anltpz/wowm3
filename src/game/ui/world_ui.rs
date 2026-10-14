@@ -212,7 +212,8 @@ fn update_plates(
         want.push((
             pe,
             Kind::Npc,
-            ppos + Vec3::Y * 2.15,
+            // Binekteyken binici daha yüksekte.
+            ppos + Vec3::Y * if stats.riding { 3.2 } else { 2.15 },
             format!("{} Lv.{}
 <Lonca: Kardeşlik>", stats.name, stats.level),
             Color::srgb(0.35, 1.0, 0.35),
@@ -259,6 +260,10 @@ fn update_plates(
         }
     });
 
+    // Yakından uzağa: çakışan NPC plakalarında yakındaki kalır (QA H4).
+    let cpos = cgt.translation();
+    want.sort_by(|a, b| a.2.distance_squared(cpos).total_cmp(&b.2.distance_squared(cpos)));
+    let mut placed: Vec<Vec2> = Vec::new();
     for (owner, kind, world, s, color, frac, size) in want {
         let plate = plates
             .0
@@ -276,9 +281,22 @@ fn update_plates(
         // Kameranın arkası.
         let fwd = cgt.forward();
         let behind = (world - cgt.translation()).dot(*fwd) < 0.0;
+        let mut hidden = behind;
+        // Bina arkasındaki plakalar görünmez.
+        if !hidden && matches!(kind, Kind::Npc | Kind::Enemy) && owner != pe {
+            hidden = crate::game::terrain::occluded(cpos, world);
+        }
+        // NPC / oyuncu plakaları üst üste binmesin.
+        if !hidden && kind == Kind::Npc {
+            if placed.iter().any(|p| (p.x - vp.x).abs() < 120.0 && (p.y - vp.y).abs() < 30.0) {
+                hidden = true;
+            } else {
+                placed.push(vp);
+            }
+        }
         let width = if kind == Kind::Float { 160.0 } else { 220.0 };
         if let Ok((mut n, mut v)) = nodes.get_mut(plate.root) {
-            *v = if behind { Visibility::Hidden } else { Visibility::Inherited };
+            *v = if hidden { Visibility::Hidden } else { Visibility::Inherited };
             n.left = px(vp.x - width / 2.0);
             let h = if kind == Kind::Npc { 34.0 } else if kind == Kind::Enemy { 24.0 } else { 16.0 };
             n.top = px(vp.y - h);

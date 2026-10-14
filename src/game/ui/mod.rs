@@ -31,6 +31,21 @@ pub struct Windows {
     pub help: bool,
 }
 
+impl Windows {
+    /// Demirci penceresi (+envanter); mağazayı kapatır. NPC pencereleri birbirini dışlar (QA H3).
+    pub fn open_upgrade(&mut self) {
+        self.inventory = true;
+        self.upgrade = true;
+        self.shop = false;
+    }
+    /// Mağaza penceresi (+envanter); Demirci'yi kapatır.
+    pub fn open_shop(&mut self) {
+        self.inventory = true;
+        self.shop = true;
+        self.upgrade = false;
+    }
+}
+
 /// İmlecin üstündeyken dünyaya tıklamayı engelleyen UI düğümü.
 #[derive(Component)]
 pub struct BlocksWorld;
@@ -140,8 +155,9 @@ fn env_open(
     for k in list.iter() {
         match k.as_str() {
             "inv" | "inventory" | "envanter" => w.inventory = true,
-            "shop" | "tuccar" | "satici" => w.shop = true,
-            "upgrade" | "demirci" => w.upgrade = true,
+            // NPC pencereleri birbirini dışlar: ikisi de verilirse sonuncusu açılır.
+            "shop" | "tuccar" | "satici" => w.open_shop(),
+            "upgrade" | "demirci" => w.open_upgrade(),
             "help" | "yardim" => w.help = true,
             _ => {}
         }

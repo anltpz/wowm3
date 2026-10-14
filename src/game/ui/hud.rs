@@ -895,7 +895,7 @@ fn update_log(
         for l in lines.into_iter().rev() {
             let a = (1.0 - (now - l.at - 25.0).max(0.0) / 5.0).clamp(0.0, 1.0);
             p.spawn((
-                Text::new(format!("[Sistem] {}", l.text)),
+                Text::new(if l.system { format!("[Sistem] {}", l.text) } else { l.text.clone() }),
                 TextFont { font: ui.font.clone(), font_size: 14.0, ..default() },
                 TextColor(l.color.with_alpha(a)),
                 TextShadow::default(),

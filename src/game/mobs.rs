@@ -236,6 +236,10 @@ pub struct Mob {
     pub aggro: bool,
 }
 
+/// Edilgen mob (model galerisi `AZM_MOBGAL`): yerinde durur, saldırmaz (QA H6).
+#[derive(Component)]
+pub struct Passive;
+
 /// Bir sürü yuvası: ölen üyeleri bir süre sonra yeniden doğurur.
 #[derive(Component)]
 pub struct Pack {
@@ -642,7 +646,7 @@ fn mob_ai(
     col: WorldCollision,
     stats: Res<PlayerStats>,
     player: Query<(Entity, &Transform), (With<Player>, Without<Mob>)>,
-    mut mobs: Query<(Entity, &mut Mob, &mut Transform, &mut AnimState, &Enemy, &Health), Without<Dying>>,
+    mut mobs: Query<(Entity, &mut Mob, &mut Transform, &mut AnimState, &Enemy, &Health, Has<Passive>), Without<Dying>>,
     mut hurt: MessageWriter<PlayerHurt>,
 ) {
     let Ok((pe, pxf)) = player.single() else { return };
@@ -650,7 +654,10 @@ fn mob_ai(
     let dt = time.delta_secs();
     let now = time.elapsed_secs();
     let mut rng = rand::rng();
-    for (e, mut m, mut xf, mut st, en, hp) in &mut mobs {
+    for (e, mut m, mut xf, mut st, en, hp, passive) in &mut mobs {
+        if passive {
+            continue;
+        }
         let pos = xf.translation;
         let to_p = Vec3::new(ppos.x - pos.x, 0.0, ppos.z - pos.z);
         let dist_p = to_p.length();
