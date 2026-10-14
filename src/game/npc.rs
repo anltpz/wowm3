@@ -10,7 +10,7 @@ use benilla_assets::WorldAssets;
 
 use super::camera::OrbitCam;
 use super::character::{build_body_as, build_item_model, Appearance, ArmorSet, CharDb};
-use super::combat::{cursor_ray, MoveTo, PlayerTarget, UiHover};
+use super::combat::{cursor_ray, Clicks};
 use super::log::GameLog;
 use super::model::{AnimState, ModelReady};
 use super::player::Player;
@@ -394,23 +394,20 @@ const NPC_CLEARANCE: f32 = 3.0;
 /// Karşılama satırının sohbet kutusu rengi (sarı).
 const C_NPC: Color = Color::srgb(1.0, 0.9, 0.3);
 
-/// Tıklanan, yürüyerek ulaşılmayı bekleyen NPC.
-#[derive(Resource, Default)]
-struct PendingTalk(Option<Entity>);
-
 /// Model hazır olunca sağ ele takılacak eşya görünümü (NPC ve insan moblar).
 #[derive(Component)]
 pub struct WantsTool(pub Option<u32>);
 
-const TALK_RANGE: f32 = 4.0;
+/// Konuşma menzili (WoW etkileşim mesafesi ≈ 5 yarda).
+const TALK_RANGE: f32 = 5.0;
 
 pub fn plugin(app: &mut App) {
-    app.init_resource::<PendingTalk>().add_message::<NpcTalked>().add_systems(
+    app.add_message::<NpcTalked>().add_systems(
         Update,
         (
             spawn_npcs,
             attach_tools,
-            (click_npc.after(super::combat::CombatInput), arrive, face_talker).chain(),
+            (click_npc.after(super::combat::CombatInput), face_talker).chain(),
         ),
     );
 }
@@ -556,7 +553,9 @@ fn attach_tools(
 fn open(w: &mut Windows, kind: NpcKind) {
     match kind {
         NpcKind::Blacksmith => w.open_upgrade(),
-        k if k.is_shop() => w.open_shop(),
+        NpcKind::WeaponMerchant => w.open_shop(super::ui::ShopKind::Weapons),
+        NpcKind::ArmorMerchant => w.open_shop(super::ui::ShopKind::Armor),
+        k if k.is_shop() => w.open_shop(super::ui::ShopKind::General),
         _ => {}
     }
 }
@@ -579,18 +578,17 @@ fn talk(
     open(w, npc.kind);
 }
 
+/// WoW: NPC'ye sağ tıklayınca konuşulur (menzildeyse); uzaksa uyarı, oyuncu kendiliğinden yürümez.
 fn click_npc(
     time: Res<Time>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    ui: Res<UiHover>,
+    clicks: Res<Clicks>,
     window: Query<&Window, With<PrimaryWindow>>,
     cam: Query<(&Camera, &GlobalTransform), With<OrbitCam>>,
     npcs: Query<(Entity, &Transform, &Npc), Without<Player>>,
     player: Query<&Transform, With<Player>>,
-    (mut move_to, mut target, mut pending): (ResMut<MoveTo>, ResMut<PlayerTarget>, ResMut<PendingTalk>),
     (mut w, mut log, mut out): (ResMut<Windows>, ResMut<GameLog>, MessageWriter<NpcTalked>),
 ) {
-    if ui.0 || !buttons.just_pressed(MouseButton::Left) {
+    if !clicks.right {
         return;
     }
     let (Ok(window), Ok(cam), Ok(pxf)) = (window.single(), cam.single(), player.single()) else { return };
@@ -614,39 +612,11 @@ fn click_npc(
         }
     }
     let Some((_, e, xf, npc)) = best else { return };
-    target.0 = None;
+    let now = time.elapsed_secs();
     if xf.translation.distance(pxf.translation) <= TALK_RANGE {
-        talk(e, npc, time.elapsed_secs(), &mut w, &mut log, &mut out);
-        move_to.0 = None;
-        pending.0 = None;
+        talk(e, npc, now, &mut w, &mut log, &mut out);
     } else {
-        let dir = (pxf.translation - xf.translation).normalize_or_zero();
-        move_to.0 = Some(xf.translation + dir * 2.0);
-        pending.0 = Some(e);
-    }
-}
-
-fn arrive(
-    time: Res<Time>,
-    mut pending: ResMut<PendingTalk>,
-    npcs: Query<(&Transform, &Npc), Without<Player>>,
-    player: Query<&Transform, With<Player>>,
-    move_to: Res<MoveTo>,
-    mut w: ResMut<Windows>,
-    mut log: ResMut<GameLog>,
-    mut out: MessageWriter<NpcTalked>,
-) {
-    let Some(e) = pending.0 else { return };
-    let (Ok((xf, npc)), Ok(pxf)) = (npcs.get(e), player.single()) else {
-        pending.0 = None;
-        return;
-    };
-    if xf.translation.distance(pxf.translation) <= TALK_RANGE {
-        talk(e, npc, time.elapsed_secs(), &mut w, &mut log, &mut out);
-        pending.0 = None;
-    } else if move_to.0.is_none() {
-        // Yürüme iptal edildi.
-        pending.0 = None;
+        log.push(now, super::log::C_BAD, "Çok uzaktasın.");
     }
 }
 

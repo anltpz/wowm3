@@ -25,7 +25,7 @@ pub struct PlayerStats {
     /// Öfke (berserk) bitiş zamanı, saniye.
     #[serde(skip)]
     pub rage_until: f32,
-    /// Binicilik Bileti'nden kalan binek süresi (sn). At Madalyonu varken azalmaz.
+    /// Binicilik Bileti'nden kalan binek süresi (sn). Ölüm Atı Dizginleri varken azalmaz.
     pub mount_left: f32,
     /// Binek üstünde mi.
     pub riding: bool,

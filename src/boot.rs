@@ -41,6 +41,9 @@ pub fn run() -> AppExit {
     }
 
     let mut app = App::new();
+    // Silinmiş bir varlığa ertelenmiş komut (ör. model kurulurken ömrü dolan efekt, ölen mob) oyunu
+    // çökertmesin: Bevy'nin varsayılanı panik, burada uyarı yazılır.
+    app.set_error_handler(bevy::ecs::error::warn);
     app.insert_resource(benilla_world::build_id::BuildId {
         version: env!("CARGO_PKG_VERSION"),
         ..Default::default()

@@ -6,6 +6,7 @@ pub mod camera;
 pub mod character;
 pub mod combat;
 pub mod devshot;
+pub mod fx;
 pub mod gallery;
 pub mod inventory;
 pub mod items;
@@ -100,6 +101,7 @@ impl Plugin for GamePlugin {
             quest::plugin,
             save::plugin,
             mount::plugin,
+            fx::plugin,
         ))
         .init_resource::<inventory::Inventory>()
         .add_systems(Update, (snap_to_ground, mobs::heal_returning, npc::auto_close));

@@ -29,6 +29,20 @@ pub struct Windows {
     pub upgrade: bool,
     pub shop: bool,
     pub help: bool,
+    /// Açık mağazanın türü (hangi satıcı).
+    pub shop_kind: ShopKind,
+}
+
+/// Satıcı türü: her birinin kendi stoku var.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShopKind {
+    /// Tüccar: iksirler, parşömenler.
+    #[default]
+    General,
+    /// Silah Satıcısı.
+    Weapons,
+    /// Zırh Satıcısı.
+    Armor,
 }
 
 impl Windows {
@@ -39,9 +53,10 @@ impl Windows {
         self.shop = false;
     }
     /// Mağaza penceresi (+envanter); Demirci'yi kapatır.
-    pub fn open_shop(&mut self) {
+    pub fn open_shop(&mut self, kind: ShopKind) {
         self.inventory = true;
         self.shop = true;
+        self.shop_kind = kind;
         self.upgrade = false;
     }
 }
@@ -55,8 +70,6 @@ pub const PANEL_BG: Color = Color::srgba(0.07, 0.055, 0.04, 0.93);
 pub const PANEL_BORDER: Color = Color::srgb(0.62, 0.48, 0.24);
 #[allow(dead_code)]
 pub const TITLE_BG: Color = Color::srgba(0.18, 0.12, 0.06, 0.98);
-pub const SLOT_BG: Color = Color::srgba(0.015, 0.015, 0.015, 0.9);
-pub const SLOT_BORDER: Color = Color::srgb(0.32, 0.26, 0.16);
 #[allow(dead_code)]
 pub const SLOT_HOVER: Color = Color::srgb(0.85, 0.7, 0.3);
 pub const TEXT: Color = Color::srgb(0.93, 0.9, 0.82);
@@ -112,8 +125,14 @@ fn update_hover(
         .any(|(r, v)| v.get() && r.cursor_over());
 }
 
-fn toggle_windows(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Windows>) {
-    if keys.just_pressed(KeyCode::KeyI) || keys.just_pressed(KeyCode::Tab) {
+fn toggle_windows(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut w: ResMut<Windows>,
+    mut target: ResMut<crate::game::combat::PlayerTarget>,
+    mut auto: ResMut<crate::game::combat::AutoAttack>,
+) {
+    // WoW: B çantalar (I de çalışır); Tab hedef seçmeye ayrıldı.
+    if keys.just_pressed(KeyCode::KeyB) || keys.just_pressed(KeyCode::KeyI) {
         w.inventory = !w.inventory;
     }
     if keys.just_pressed(KeyCode::KeyH) {
@@ -123,9 +142,13 @@ fn toggle_windows(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Windows>) {
         if w.upgrade || w.shop {
             w.upgrade = false;
             w.shop = false;
-        } else {
+        } else if w.inventory || w.help {
             w.inventory = false;
             w.help = false;
+        } else {
+            // WoW: açık pencere yoksa Esc hedefi bırakır.
+            target.0 = None;
+            auto.0 = false;
         }
     }
 }
@@ -156,7 +179,9 @@ fn env_open(
         match k.as_str() {
             "inv" | "inventory" | "envanter" => w.inventory = true,
             // NPC pencereleri birbirini dışlar: ikisi de verilirse sonuncusu açılır.
-            "shop" | "tuccar" | "satici" => w.open_shop(),
+            "shop" | "tuccar" | "satici" => w.open_shop(ShopKind::General),
+            "silah" | "weapons" => w.open_shop(ShopKind::Weapons),
+            "zirh" | "armor" => w.open_shop(ShopKind::Armor),
             "upgrade" | "demirci" => w.open_upgrade(),
             "help" | "yardim" => w.help = true,
             _ => {}

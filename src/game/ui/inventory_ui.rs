@@ -716,7 +716,7 @@ fn use_items(
                 }
             }
             Kind::Blessing | Kind::Handbook | Kind::DragonScale => {
-                log.push(now, C_INFO, "Bu kağıt Demirci'de yükseltme yaparken kullanılır.");
+                log.push(now, C_INFO, "Bu eşya Demirci'de yükseltme yaparken kullanılır.");
             }
             Kind::Material => {
                 log.push(now, C_INFO, "Yükseltme malzemesi. Demirci'ye götür.");

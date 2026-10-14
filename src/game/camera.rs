@@ -57,18 +57,33 @@ fn spawn_camera(mut commands: Commands, msaa: Res<benilla_world::view::MsaaSetti
     ));
 }
 
+/// WoW kamerası: sol tık sürükle = yalnızca kamera döner (serbest bakış), sağ tık sürükle = kamera ve
+/// karakter birlikte döner (yönlendirme). Fare bırakılıp yürüyünce kamera yavaşça karakterin arkasına
+/// döner. Bir UI penceresinin üstünde başlayan sürükleme kamerayı çevirmez.
 fn orbit(
+    time: Res<Time>,
     buttons: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
+    ui: Res<super::combat::UiHover>,
     mut wheel: MessageReader<MouseWheel>,
-    player: Query<&Transform, (With<Player>, Without<OrbitCam>)>,
+    mut player: Query<(&mut Transform, &Player), Without<OrbitCam>>,
     mut cam: Query<(&mut Transform, &mut OrbitCam)>,
     collision: benilla_world::collision::WorldCollision,
+    mut grab: Local<[bool; 3]>,
 ) {
     let Ok((mut xf, mut cam)) = cam.single_mut() else {
         return;
     };
-    if buttons.pressed(MouseButton::Right) || buttons.pressed(MouseButton::Middle) {
+    for (i, b) in [MouseButton::Left, MouseButton::Right, MouseButton::Middle].into_iter().enumerate() {
+        if buttons.just_pressed(b) {
+            grab[i] = !ui.0;
+        }
+        if !buttons.pressed(b) {
+            grab[i] = false;
+        }
+    }
+    let [look, steer, middle] = *grab;
+    if look || steer || middle {
         cam.yaw -= motion.delta.x * 0.005;
         cam.pitch = (cam.pitch - motion.delta.y * 0.005).clamp(-1.55, 0.25);
     }
@@ -78,9 +93,19 @@ fn orbit(
     if cam.dist > 30.0 && std::env::var("AZM_DIST").is_err() {
         cam.dist = 30.0;
     }
-    let Ok(p) = player.single() else {
+    let Ok((mut pxf, pl)) = player.single_mut() else {
         return;
     };
+    if steer {
+        // Sağ tık: karakter kameranın baktığı yöne döner.
+        pxf.rotation = Quat::from_rotation_y(cam.yaw);
+    } else if pl.moving && !look && !pl.backward {
+        // Yürürken kamera karakterin arkasına toparlanır.
+        let want = super::player::yaw_of(pxf.rotation);
+        let diff = (want - cam.yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+        cam.yaw += diff * (time.delta_secs() * 3.0).min(1.0);
+    }
+    let p = *pxf;
     let target = p.translation + Vec3::Y * 1.6;
     let rot = Quat::from_euler(EulerRot::YXZ, cam.yaw, cam.pitch, 0.0);
     let back = rot * Vec3::Z;
