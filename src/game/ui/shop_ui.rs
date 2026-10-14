@@ -1,4 +1,4 @@
-//! Tüccar penceresi: iksir, kağıt ve başlangıç ekipmanı satar. Satış: eşyayı pencereye sürükle
+//! Satıcı (Tüccar) penceresi: iksir, kağıt ve başlangıç ekipmanı satar. Satış: eşyayı pencereye sürükle
 //! ya da pencere açıkken envanterde sağ tıkla.
 
 use bevy::prelude::*;
@@ -6,7 +6,8 @@ use bevy::prelude::*;
 use benilla_assets::WorldAssets;
 
 use super::inventory_ui::SellItem;
-use super::{icon, panel, text, thousands, UiAssets, Windows, GOLD, SLOT_BG, SLOT_BORDER, TEXT, TEXT_DIM, TITLE_BG};
+use super::skin::{self, Skin, Style};
+use super::{icon, text, thousands, UiAssets, Windows, TEXT, TEXT_DIM};
 use crate::game::inventory::Inventory;
 use crate::game::items::{self, Item};
 use crate::game::log::{GameLog, C_BAD, C_ITEM};
@@ -38,7 +39,7 @@ pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
-            build.run_if(resource_exists::<UiAssets>.and(resource_exists::<WorldAssets>)),
+            build.run_if(resource_exists::<UiAssets>.and(resource_exists::<WorldAssets>).and(resource_exists::<Skin>)),
             (show_hide, buy, sell).run_if(resource_exists::<UiAssets>),
         ),
     );
@@ -47,6 +48,7 @@ pub fn plugin(app: &mut App) {
 fn build(
     mut commands: Commands,
     ui: Res<UiAssets>,
+    skin: Res<Skin>,
     mut wa: ResMut<WorldAssets>,
     mut images: ResMut<Assets<Image>>,
     mut done: Local<bool>,
@@ -55,77 +57,74 @@ fn build(
         return;
     }
     *done = true;
-    commands
-        .spawn((
-            panel(Node {
-                position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: px(100),
-                margin: UiRect::left(px(-360)),
-                width: px(360),
-                flex_direction: FlexDirection::Column,
+    skin::spawn_window(
+        &mut commands,
+        &skin,
+        &ui,
+        Style::Dialog,
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Percent(50.0),
+            top: px(100),
+            margin: UiRect::left(px(-380)),
+            width: px(380),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(3),
+            ..default()
+        },
+        "Satıcı — Genel Mağaza",
+        CloseShop,
+    )
+    .insert((Visibility::Hidden, ShopWindow))
+    .with_children(|w| {
+        for (i, (v, n, price)) in GOODS.iter().enumerate() {
+            let it = Item::stack(*v, *n);
+            let img = icon(&mut wa, &mut images, &it.icon_path()).unwrap_or_default();
+            // WoW satıcı satırı: altın kenarlı ikon yuvası + ad etiketi + fiyat (sikke) + Satın Al.
+            w.spawn(Node {
+                width: Val::Percent(100.0),
+                height: px(32),
+                column_gap: px(6),
                 align_items: AlignItems::Center,
-                padding: UiRect::bottom(px(8)),
-                row_gap: px(3),
                 ..default()
-            }),
-            Visibility::Hidden,
-            ShopWindow,
-        ))
-        .with_children(|w| {
-            w.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    height: px(26),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(TITLE_BG),
-            ))
-            .with_child(text(&ui, "Tüccar — Genel Mağaza", 15.0, GOLD));
-            for (i, (v, n, price)) in GOODS.iter().enumerate() {
-                let it = Item::stack(*v, *n);
-                let img = icon(&mut wa, &mut images, &it.icon_path()).unwrap_or_default();
-                w.spawn((
-                    Button,
+            })
+            .with_children(|r| {
+                r.spawn((
                     Node {
-                        width: px(340),
+                        width: px(30),
                         height: px(30),
-                        border: UiRect::all(px(1)),
-                        padding: UiRect::horizontal(px(4)),
-                        column_gap: px(8),
+                        flex_shrink: 0.0,
+                        justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(SLOT_BG),
-                    BorderColor::all(SLOT_BORDER),
-                    BuyButton(i),
+                    skin::sliced(skin.empty_slot.clone(), 10.0, 0.6),
                 ))
-                .with_children(|r| {
-                    r.spawn((Node { width: px(24), height: px(24), ..default() }, ImageNode::new(img)));
+                .with_child((Node { width: px(24), height: px(24), ..default() }, ImageNode::new(img)));
+                r.spawn((
+                    Node {
+                        flex_grow: 1.0,
+                        height: px(28),
+                        padding: UiRect::horizontal(px(8)),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    skin::sliced(skin.row_bg.clone(), 8.0, 1.0),
+                ))
+                .with_children(|l| {
                     let name = if *n > 1 { format!("{} x{}", it.def().name, n) } else { it.def().name.to_string() };
-                    r.spawn((Node { flex_grow: 1.0, ..default() }, children![text(&ui, name, 13.0, TEXT)]));
-                    r.spawn(text(&ui, format!("{} Yang", thousands(*price as u64)), 12.0, GOLD));
+                    l.spawn((Node { flex_grow: 1.0, ..default() }, children![(text(&ui, name, 13.0, TEXT), skin::shadow())]));
+                    l.spawn((text(&ui, thousands(*price as u64), 12.0, TEXT), skin::shadow()));
+                    l.spawn(skin::coin(&skin));
                 });
-            }
-            w.spawn(text(&ui, "Satmak için: eşyayı buraya sürükle ya da sağ tıkla", 11.0, TEXT_DIM));
-            w.spawn((
-                Button,
-                Node {
-                    width: px(110),
-                    height: px(26),
-                    border: UiRect::all(px(1)),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.3, 0.2, 0.08)),
-                BorderColor::all(Color::srgb(0.8, 0.62, 0.3)),
-                CloseShop,
-            ))
-            .with_child(text(&ui, "Kapat", 14.0, GOLD));
-        });
+                r.spawn((skin::panel_button(&skin, &ui, "Satın Al", 72.0, 22.0, ()), BuyButton(i)));
+            });
+        }
+        w.spawn(Node { height: px(4), ..default() });
+        w.spawn(text(&ui, "Satmak için: eşyayı buraya sürükle ya da sağ tıkla", 11.0, TEXT_DIM));
+        w.spawn((skin::panel_button(&skin, &ui, "Kapat", 96.0, 22.0, ()), CloseShop));
+    });
 }
 
 fn show_hide(w: Res<Windows>, mut q: Query<&mut Visibility, With<ShopWindow>>) {
@@ -139,19 +138,13 @@ fn show_hide(w: Res<Windows>, mut q: Query<&mut Visibility, With<ShopWindow>>) {
 
 fn buy(
     time: Res<Time>,
-    mut q: Query<(&Interaction, &mut BackgroundColor, Option<&BuyButton>, Option<&CloseShop>), Changed<Interaction>>,
+    q: Query<(&Interaction, Option<&BuyButton>, Option<&CloseShop>), Changed<Interaction>>,
     mut inv: ResMut<Inventory>,
     mut w: ResMut<Windows>,
     mut log: ResMut<GameLog>,
 ) {
     let now = time.elapsed_secs();
-    for (i, mut bg, b, close) in &mut q {
-        bg.0 = match i {
-            Interaction::Hovered => Color::srgb(0.25, 0.18, 0.08),
-            Interaction::Pressed => Color::srgb(0.4, 0.28, 0.1),
-            Interaction::None if close.is_some() => Color::srgb(0.3, 0.2, 0.08),
-            Interaction::None => SLOT_BG,
-        };
+    for (i, b, close) in &q {
         if *i != Interaction::Pressed {
             continue;
         }

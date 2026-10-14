@@ -9,6 +9,8 @@ use super::items::Kind;
 pub const MAX_LEVEL: u32 = 40;
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
+/// Kayıtta eksik alanlar varsayılandan gelir (eski save.ron uyumu).
+#[serde(default)]
 pub struct PlayerStats {
     pub name: String,
     pub level: u32,

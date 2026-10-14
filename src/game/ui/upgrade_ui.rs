@@ -9,7 +9,8 @@ use rand::Rng;
 use benilla_assets::WorldAssets;
 
 use super::inventory_ui::{DropToUpgrade, PITCH, SLOT};
-use super::{icon, panel, text, thousands, UiAssets, Windows, GOLD, SLOT_BG, SLOT_BORDER, TEXT, TEXT_DIM, TITLE_BG};
+use super::skin::{self, Skin, SkinButton, SkinCheck, Style};
+use super::{icon, text, thousands, UiAssets, Windows, GOLD, TEXT, TEXT_DIM};
 use crate::game::inventory::Inventory;
 use crate::game::items::{self, upgrade_cost, Item, MAX_PLUS, UPGRADE_CHANCE};
 use crate::game::log::{GameLog, C_BAD, C_GOOD, C_INFO};
@@ -46,12 +47,15 @@ enum Btn {
 }
 #[derive(Component)]
 struct BtnLabel(Btn);
+/// Seçeneğin onay kutusu.
+#[derive(Component)]
+struct CheckFor(Btn);
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<UpgradeState>().add_systems(
         Update,
         (
-            build.run_if(resource_added::<UiAssets>),
+            build.run_if(resource_exists::<UiAssets>.and(resource_exists::<Skin>)),
             (show_hide, accept_drop, validate, buttons, redraw)
                 .chain()
                 .run_if(resource_exists::<UiAssets>),
@@ -59,78 +63,84 @@ pub fn plugin(app: &mut App) {
     );
 }
 
-fn build(mut commands: Commands, ui: Res<UiAssets>) {
-    commands
-        .spawn((
-            panel(Node {
-                position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: px(120),
-                margin: UiRect::left(px(-320)),
-                width: px(330),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                padding: UiRect::bottom(px(10)),
-                row_gap: px(8),
-                ..default()
-            }),
-            Visibility::Hidden,
-            UpgradeWindow,
-        ))
-        .with_children(|w| {
-            w.spawn((
+fn build(mut commands: Commands, ui: Res<UiAssets>, skin: Res<Skin>, mut done: Local<bool>) {
+    if *done {
+        return;
+    }
+    *done = true;
+    skin::spawn_window(
+        &mut commands,
+        &skin,
+        &ui,
+        Style::Gold,
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Percent(50.0),
+            top: px(120),
+            margin: UiRect::left(px(-340)),
+            width: px(350),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(6),
+            ..default()
+        },
+        "Demirci — Eşya Yükseltme",
+        Btn::Close,
+    )
+    .insert((Visibility::Hidden, UpgradeWindow))
+    .with_children(|w| {
+        w.spawn(Node {
+            column_gap: px(10),
+            align_items: AlignItems::Center,
+            width: Val::Percent(100.0),
+            ..default()
+        })
+        .with_children(|r| {
+            // Altın kenarlı yükseltme yuvası (UI-EmptySlot).
+            r.spawn((
                 Node {
-                    width: Val::Percent(100.0),
-                    height: px(26),
+                    width: px(SLOT + 8.0),
+                    height: px(3.0 * PITCH + 6.0),
+                    flex_shrink: 0.0,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(TITLE_BG),
+                skin::sliced(skin.empty_slot.clone(), 10.0, 0.8),
+                RelativeCursorPosition::default(),
+                UpgradeSlot,
             ))
-            .with_child(text(&ui, "Demirci — Eşya Yükseltme", 15.0, GOLD));
-            w.spawn(Node {
-                column_gap: px(14),
-                align_items: AlignItems::Center,
-                padding: UiRect::horizontal(px(10)),
-                width: Val::Percent(100.0),
-                ..default()
-            })
-            .with_children(|r| {
-                r.spawn((
+            .with_children(|s| {
+                s.spawn((
                     Node {
-                        width: px(SLOT + 4.0),
-                        height: px(3.0 * PITCH + 2.0),
-                        border: UiRect::all(px(1)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
+                        position_type: PositionType::Absolute,
                         ..default()
                     },
-                    BackgroundColor(SLOT_BG),
-                    BorderColor::all(Color::srgb(0.7, 0.55, 0.25)),
-                    RelativeCursorPosition::default(),
-                    UpgradeSlot,
-                ))
-                .with_children(|s| {
-                    s.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            ..default()
-                        },
-                        text(&ui, "Eşyayı\nbırak", 10.0, TEXT_DIM),
-                    ));
-                    s.spawn((
-                        Node {
-                            width: px(SLOT),
-                            height: px(2.0 * PITCH - 4.0),
-                            ..default()
-                        },
-                        ImageNode::default(),
-                        Visibility::Hidden,
-                        UpgradeIcon,
-                    ));
-                });
-                r.spawn((
+                    text(&ui, "Eşyayı\nbırak", 10.0, TEXT_DIM),
+                    Pickable::IGNORE,
+                ));
+                s.spawn((
+                    Node {
+                        width: px(SLOT),
+                        height: px(2.0 * PITCH - 4.0),
+                        ..default()
+                    },
+                    ImageNode::default(),
+                    Visibility::Hidden,
+                    Pickable::IGNORE,
+                    UpgradeIcon,
+                ));
+            });
+            // Bilgi kutusu (WoW iç kutu).
+            r.spawn(Node {
+                flex_grow: 1.0,
+                min_height: px(3.0 * PITCH + 6.0),
+                padding: UiRect::all(px(9)),
+                ..default()
+            })
+            .with_children(|b| {
+                skin::inset_layers(b, &skin, false);
+                b.spawn((
                     Node {
                         flex_direction: FlexDirection::Column,
                         row_gap: px(3),
@@ -140,53 +150,42 @@ fn build(mut commands: Commands, ui: Res<UiAssets>) {
                     InfoBox,
                 ));
             });
-            // Seçenekler
-            for (b, label) in [
-                (Btn::Blessing, "Kutsama Kağıdı"),
-                (Btn::Handbook, "Demircinin El Kitabı"),
-                (Btn::Scale, "Ejderha Pulu"),
-            ] {
-                w.spawn((
-                    Button,
-                    Node {
-                        width: px(300),
-                        height: px(22),
-                        border: UiRect::all(px(1)),
-                        padding: UiRect::horizontal(px(6)),
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(SLOT_BG),
-                    BorderColor::all(SLOT_BORDER),
-                    b,
-                ))
-                .with_child((text(&ui, label, 12.0, TEXT), BtnLabel(b)));
-            }
-            w.spawn(Node {
-                column_gap: px(10),
-                ..default()
-            })
-            .with_children(|r| {
-                for (b, label) in [(Btn::Upgrade, "Yükselt"), (Btn::Close, "Kapat")] {
-                    r.spawn((
-                        Button,
-                        Node {
-                            width: px(120),
-                            height: px(28),
-                            border: UiRect::all(px(1)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            border_radius: BorderRadius::all(px(3)),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.3, 0.2, 0.08)),
-                        BorderColor::all(Color::srgb(0.8, 0.62, 0.3)),
-                        b,
-                    ))
-                    .with_child(text(&ui, label, 14.0, GOLD));
-                }
-            });
         });
+        // Seçenekler (WoW onay kutuları).
+        for (b, label) in [
+            (Btn::Blessing, "Kutsama Kağıdı"),
+            (Btn::Handbook, "Demircinin El Kitabı"),
+            (Btn::Scale, "Ejderha Pulu"),
+        ] {
+            w.spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: px(24),
+                    padding: UiRect::horizontal(px(4)),
+                    column_gap: px(6),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                SkinButton::default(),
+                b,
+            ))
+            .with_children(|r| {
+                r.spawn(skin::hi_layer(skin.row_hi.clone(), NodeImageMode::Stretch, 0.0));
+                r.spawn((skin::checkbox(&skin, 22.0), CheckFor(b)));
+                r.spawn((text(&ui, label, 12.0, TEXT), skin::shadow(), Pickable::IGNORE, BtnLabel(b)));
+            });
+        }
+        w.spawn(Node {
+            column_gap: px(12),
+            margin: UiRect::top(px(4)),
+            ..default()
+        })
+        .with_children(|r| {
+            r.spawn((skin::panel_button(&skin, &ui, "Yükselt", 112.0, 22.0, ()), Btn::Upgrade));
+            r.spawn((skin::panel_button(&skin, &ui, "Kapat", 112.0, 22.0, ()), Btn::Close));
+        });
+    });
 }
 
 fn show_hide(w: Res<Windows>, mut q: Query<&mut Visibility, With<UpgradeWindow>>, mut st: ResMut<UpgradeState>) {
@@ -242,23 +241,14 @@ pub fn chance(it: &Item, handbook: bool, scale: bool) -> u32 {
 
 fn buttons(
     time: Res<Time>,
-    mut q: Query<(&Btn, &Interaction, &mut BackgroundColor), Changed<Interaction>>,
+    q: Query<(&Btn, &Interaction), Changed<Interaction>>,
     mut st: ResMut<UpgradeState>,
     mut inv: ResMut<Inventory>,
     mut w: ResMut<Windows>,
     mut log: ResMut<GameLog>,
 ) {
     let now = time.elapsed_secs();
-    for (b, i, mut bg) in &mut q {
-        let base = match b {
-            Btn::Upgrade | Btn::Close => Color::srgb(0.3, 0.2, 0.08),
-            _ => SLOT_BG,
-        };
-        bg.0 = match i {
-            Interaction::Hovered => Color::srgb(0.42, 0.3, 0.12),
-            Interaction::Pressed => Color::srgb(0.55, 0.4, 0.15),
-            Interaction::None => base,
-        };
+    for (b, i) in &q {
         if *i != Interaction::Pressed {
             continue;
         }
@@ -348,6 +338,7 @@ fn redraw(
     boxq: Query<Entity, With<InfoBox>>,
     mut iconq: Query<(&mut ImageNode, &mut Visibility, &mut Node), With<UpgradeIcon>>,
     mut labels: Query<(&BtnLabel, &mut Text, &mut TextColor)>,
+    mut checks: Query<(&CheckFor, &mut SkinCheck)>,
     mut last: Local<(u64, Option<Item>, [bool; 3], bool)>,
 ) {
     if !w.upgrade {
@@ -357,9 +348,10 @@ fn redraw(
     if *last == key {
         return;
     }
-    *last = key;
     let Some(wa) = wa.as_deref_mut() else { return };
+    // Pencere henüz kurulmadıysa sonraki karede yeniden dene.
     let Ok(boxe) = boxq.single() else { return };
+    *last = key;
     commands.entity(boxe).despawn_children();
     if let Ok((mut img, mut vis, mut n)) = iconq.single_mut() {
         match st.item {
@@ -380,8 +372,19 @@ fn redraw(
             Btn::Scale => ("Ejderha Pulu (+%20, koruma)", inv.count(items::V_DRAGON_SCALE), st.scale),
             _ => continue,
         };
-        t.0 = format!("[{}] {}  ({} adet)", if on { "X" } else { " " }, name, have);
+        t.0 = format!("{}  ({} adet)", name, have);
         c.0 = if have == 0 { TEXT_DIM } else if on { GOLD } else { TEXT };
+    }
+    for (f, mut c) in &mut checks {
+        let on = match f.0 {
+            Btn::Blessing => st.blessing,
+            Btn::Handbook => st.handbook,
+            Btn::Scale => st.scale,
+            _ => false,
+        };
+        if c.0 != on {
+            c.0 = on;
+        }
     }
     commands.entity(boxe).with_children(|b| {
         let Some(it) = st.item else {
