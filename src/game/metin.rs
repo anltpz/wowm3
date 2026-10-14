@@ -163,6 +163,8 @@ pub struct Metin {
     pub def: &'static MetinDef,
     /// Sonraki dalganın HP eşiği indeksi.
     pub wave: usize,
+    /// Dalgalarda çağrılacak moblar; None ya da boşsa `def.summons` (Pyungmoo canavarları).
+    pub summons: Option<&'static [u32]>,
 }
 
 /// Taşın altındaki rün dairesi efekti.
@@ -230,6 +232,66 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, (spawn_metins, metin_waves, metin_killed, mob_drops, spin_runes));
 }
 
+/// `at` konumunda (Bevy dünya koordinatı, zemin) bir metin taşı doğurur: model, rün dairesi, renkli ışık.
+/// Zindan katları ve bölge yerleşimi kullanır. `summons` dalga moblarını belirler (None → `def.summons`).
+/// Yeniden doğma yuvası yoktur: kırılınca ganimet düşer, başka yerde yeniden belirmez.
+pub fn spawn_metin(
+    commands: &mut Commands,
+    server: &AssetServer,
+    def: &'static MetinDef,
+    at: Vec3,
+    yaw: f32,
+    summons: Option<&'static [u32]>,
+) -> Entity {
+    let mut wm = WowModel::new(load_m2(server, "World/Azeroth/BurningSteppes/PassiveDoodads/Rocks/LavaRock01.m2"));
+    wm.tint = Color::linear_rgb(def.tint[0], def.tint[1], def.tint[2]);
+    wm.emissive = LinearRgba::rgb(def.glow[0] * 0.15, def.glow[1] * 0.15, def.glow[2] * 0.15);
+    let e = commands
+        .spawn((
+            wm,
+            Transform::from_translation(at - Vec3::Y * 0.3)
+                .with_rotation(Quat::from_rotation_y(yaw))
+                .with_scale(Vec3::splat(def.scale)),
+            Visibility::default(),
+            Enemy {
+                name: def.name.to_string(),
+                level: def.level,
+                radius: 1.2 / def.scale * 0.5,
+                height: 7.5,
+                exp: def.exp,
+                def: def.def,
+                is_metin: true,
+            },
+            Health {
+                hp: def.hp,
+                max: def.hp,
+            },
+            Metin { def, wave: 0, summons },
+        ))
+        .id();
+    // Rün dairesi + renkli ışık.
+    commands.spawn((
+        WowModel::new(load_m2(server, "World/Goober/G_RuneGroundPurple01.m2")),
+        AnimState::default(),
+        Transform::from_translation(at + Vec3::Y * 0.05).with_scale(Vec3::splat(0.55)),
+        Visibility::default(),
+        MetinRune(e),
+    ));
+    commands.spawn((
+        PointLight {
+            color: Color::linear_rgb(def.glow[0], def.glow[1], def.glow[2]),
+            intensity: 60_000.0,
+            range: 9.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        Transform::from_translation(at + Vec3::Y * 2.0),
+        MetinRune(e),
+    ));
+    info!("metin: {} @ {at}", def.name);
+    e
+}
+
 fn spawn_metins(
     mut commands: Commands,
     time: Res<Time>,
@@ -245,7 +307,7 @@ fn spawn_metins(
     }
     if !sp.init {
         sp.init = true;
-        let n = if super::terrain::data().is_some() { PY_SLOTS.len() } else { super::elwynn::METIN_SLOTS.len() };
+        let n = if super::terrain::data().is_some() { PY_SLOTS.len() } else { super::zones::metin_slot_count() };
         sp.pending = (0..n).map(|i| (i, 0.0)).collect();
     }
     let mut rng = rand::rng();
@@ -257,79 +319,30 @@ fn spawn_metins(
         if *wait > 0.0 {
             continue;
         }
-        let (kind, at) = if let Some(d) = td {
+        let (kind, at, summons) = if let Some(d) = td {
             let kind = PY_SLOTS[*slot % PY_SLOTS.len()].0;
             match py_metin_point(d, kind) {
-                Some(p) => (kind, p),
+                Some(p) => (kind, p, None),
                 None => continue,
             }
         } else {
-            // Elwynn: alan içinde rastgele açık nokta (alan henüz akmadıysa sonra tekrar).
-            let (kind, x, y, z, r) = super::elwynn::METIN_SLOTS[*slot];
+            // Orijinal WoW (zones kaydı): alan içinde rastgele açık nokta (alan henüz akmadıysa sonra tekrar).
+            let Some((zone, &(kind, x, y, z, r))) = super::zones::metin_slot(*slot) else {
+                continue;
+            };
             let ang = rng.random_range(0.0..std::f32::consts::TAU);
             let d = r * rng.random_range(0.0f32..1.0).sqrt();
             let c = benilla_assets::coords::wow_to_bevy([x + ang.cos() * d, y + ang.sin() * d, z]);
             let Some(at) = open_ground(&col, &wp, c, z, 60.0) else {
                 continue;
             };
-            (kind, at)
+            // Dalgalarda bölgenin yaratıkları.
+            (kind, at, Some((zone.metin_summons)(kind)))
         };
         let _ = &pxf;
-        let def = &METINS[kind];
-        let mut wm = WowModel::new(load_m2(
-            &server,
-            "World/Azeroth/BurningSteppes/PassiveDoodads/Rocks/LavaRock01.m2",
-        ));
-        wm.tint = Color::linear_rgb(def.tint[0], def.tint[1], def.tint[2]);
-        wm.emissive = LinearRgba::rgb(def.glow[0] * 0.15, def.glow[1] * 0.15, def.glow[2] * 0.15);
         let yaw = rng.random_range(0.0..std::f32::consts::TAU);
-        let e = commands
-            .spawn((
-                wm,
-                Transform::from_translation(at - Vec3::Y * 0.3)
-                    .with_rotation(Quat::from_rotation_y(yaw))
-                    .with_scale(Vec3::splat(def.scale)),
-                Visibility::default(),
-                Enemy {
-                    name: def.name.to_string(),
-                    level: def.level,
-                    radius: 1.2 / def.scale * 0.5,
-                    height: 7.5,
-                    exp: def.exp,
-                    def: def.def,
-                    is_metin: true,
-                },
-                Health {
-                    hp: def.hp,
-                    max: def.hp,
-                },
-                Metin { def, wave: 0 },
-                MetinSlot(*slot),
-            ))
-            .id();
-        // Rün dairesi + renkli ışık.
-        let rune = commands
-            .spawn((
-                WowModel::new(load_m2(&server, "World/Goober/G_RuneGroundPurple01.m2")),
-                AnimState::default(),
-                Transform::from_translation(at + Vec3::Y * 0.05).with_scale(Vec3::splat(0.55)),
-                Visibility::default(),
-                MetinRune(e),
-            ))
-            .id();
-        commands.spawn((
-            PointLight {
-                color: Color::linear_rgb(def.glow[0], def.glow[1], def.glow[2]),
-                intensity: 60_000.0,
-                range: 9.0,
-                shadows_enabled: false,
-                ..default()
-            },
-            Transform::from_translation(at + Vec3::Y * 2.0),
-            MetinRune(e),
-        ));
-        let _ = rune;
-        info!("metin: {} @ {at}", def.name);
+        let e = spawn_metin(&mut commands, &server, &METINS[kind], at, yaw, summons);
+        commands.entity(e).insert(MetinSlot(*slot));
         placed.push(k);
     }
     for k in placed.into_iter().rev() {
@@ -376,12 +389,8 @@ fn metin_waves(
             m.wave += 1;
             let n = rng.random_range(3..=5);
             for _ in 0..n {
-                // Elwynn'de bölgenin WoW yaratıkları, Pyungmoo'da Metin2 canavarları.
-                let pool = if super::terrain::data().is_some() {
-                    m.def.summons
-                } else {
-                    super::elwynn::metin_summons(METINS.iter().position(|d| std::ptr::eq(d, m.def)).unwrap_or(0))
-                };
+                // WoW bölgelerinde bölgenin yaratıkları (doğarken verilir), Pyungmoo'da Metin2 canavarları.
+                let pool = m.summons.filter(|p| !p.is_empty()).unwrap_or(m.def.summons);
                 let k = pool[rng.random_range(0..pool.len())];
                 let ang = rng.random_range(0.0..std::f32::consts::TAU);
                 let off = Vec3::new(ang.cos() * 4.5, 0.0, ang.sin() * 4.5);
@@ -419,7 +428,7 @@ fn roll_drops(def: &MetinDef) -> (Vec<Item>, u32) {
 
 fn metin_killed(
     mut killed: MessageReader<Killed>,
-    q: Query<(&Metin, &MetinSlot)>,
+    q: Query<(&Metin, Option<&MetinSlot>)>,
     mut sp: ResMut<MetinSpawner>,
     mut drops: MessageWriter<DropLoot>,
     mut log: ResMut<GameLog>,
@@ -438,7 +447,10 @@ fn metin_killed(
             items,
             yang,
         });
-        sp.pending.push((slot.0, 40.0));
+        // Yuvalı taşlar 40 sn sonra başka yerde belirir; `spawn_metin` ile doğanlar (zindan) belirmez.
+        if let Some(slot) = slot {
+            sp.pending.push((slot.0, 40.0));
+        }
     }
 }
 

@@ -5,11 +5,23 @@
 //! kurt, örümcek, maden koboldları, murloc, Defias, Riverpaw gnolları; patronlar Garrick Padfoot, Princess,
 //! Mother Fang, Hogger).
 
+use super::zones::{MetinSlotRow, SpawnRow, Subzone, ZoneDef};
+
 /// İnsan karakterin WoW başlangıç noktası (Northshire Manastırı önü).
 pub const HUMAN_START: [f32; 3] = [-8949.95, -132.49, 83.53];
 
+/// Bölge kaydı (`zones::ZONES`). Kutu yaklaşık: Stormwind kapısından Westfall sınırına (Westbrook) kadar.
+pub const ZONE: ZoneDef = ZoneDef {
+    name: "Elwynn Forest",
+    bounds: [-10150.0, -8350.0, -1700.0, 950.0],
+    subzones: SUBZONES,
+    spawns: SPAWNS,
+    metin_slots: METIN_SLOTS,
+    metin_summons,
+};
+
 /// Alt bölgeler (mini harita adı): (ad, x, y, yarıçap). Küçükler önce; hiçbiri değilse "Elwynn Forest".
-pub const SUBZONES: &[(&str, f32, f32, f32)] = &[
+pub const SUBZONES: &[Subzone] = &[
     ("Echo Ridge Mine", -8631.0, -130.0, 70.0),
     ("Northshire Vineyards", -9072.0, -371.0, 90.0),
     ("Heroes' Vigil", -9111.0, -1029.0, 60.0),
@@ -33,16 +45,14 @@ pub const SUBZONES: &[(&str, f32, f32, f32)] = &[
     ("Stormwind City", -8642.0, 537.0, 400.0),
 ];
 
-/// WoW konumundaki alt bölge adı.
+/// WoW konumundaki Elwynn alt bölge adı (yoksa "Elwynn Forest"). HUD artık `zones::zone_name` kullanır.
+#[allow(dead_code)]
 pub fn subzone(wow: [f32; 3]) -> &'static str {
-    SUBZONES
-        .iter()
-        .find(|(_, x, y, r)| (wow[0] - x).hypot(wow[1] - y) <= *r)
-        .map_or("Elwynn Forest", |(n, ..)| n)
+    ZONE.subzone_at(wow).unwrap_or(ZONE.name)
 }
 
 /// Yaratık yerleşimi: (mob türleri, x, y, z, yarıçap, sürü sayısı, sürü boyu en az, en çok).
-pub const SPAWNS: &[(&[u32], f32, f32, f32, f32, usize, usize, usize)] = &[
+pub const SPAWNS: &[SpawnRow] = &[
     // --- Northshire Valley (Sv 1-5) ---
     (&[201], -8925.0, -250.0, 85.0, 80.0, 6, 1, 2),
     (&[201], -8780.0, -320.0, 105.0, 60.0, 4, 1, 2),
@@ -74,7 +84,7 @@ pub const SPAWNS: &[(&[u32], f32, f32, f32, f32, usize, usize, usize)] = &[
 ];
 
 /// Metin taşı alanları: (metin türü, x, y, z, yarıçap). Northshire'dan uzaklaştıkça zorlaşır.
-pub const METIN_SLOTS: &[(usize, f32, f32, f32, f32)] = &[
+pub const METIN_SLOTS: &[MetinSlotRow] = &[
     (0, -8850.0, -280.0, 100.0, 90.0),
     (0, -9000.0, -250.0, 85.0, 70.0),
     (0, -8780.0, -330.0, 110.0, 60.0),
@@ -117,12 +127,12 @@ mod tests {
     fn spawns_reference_known_mobs() {
         for (kinds, ..) in SPAWNS {
             for k in *kinds {
-                assert!(crate::game::mobs::MOBS.iter().any(|m| m.id == *k), "tanımsız mob {k}");
+                assert!(crate::game::mobs::find(*k).is_some(), "tanımsız mob {k}");
             }
         }
         for kind in 0..5 {
             for k in metin_summons(kind) {
-                assert!(crate::game::mobs::MOBS.iter().any(|m| m.id == *k), "tanımsız mob {k}");
+                assert!(crate::game::mobs::find(*k).is_some(), "tanımsız mob {k}");
             }
         }
         assert!(METIN_SLOTS.iter().all(|s| s.0 < crate::game::metin::METINS.len()));

@@ -121,7 +121,7 @@ impl ItemDef {
     }
 }
 
-const fn weapon(
+pub(crate) const fn weapon(
     vnum: u32,
     name: &'static str,
     icon: &'static str,
@@ -149,7 +149,7 @@ const fn weapon(
     }
 }
 
-const fn armor(
+pub(crate) const fn armor(
     vnum: u32,
     name: &'static str,
     icon: &'static str,
@@ -171,7 +171,7 @@ const fn armor(
     }
 }
 
-const fn wear(
+pub(crate) const fn wear(
     vnum: u32,
     name: &'static str,
     icon: &'static str,
@@ -201,7 +201,7 @@ const fn wear(
     }
 }
 
-const fn misc(
+pub(crate) const fn misc(
     vnum: u32,
     name: &'static str,
     icon: &'static str,
@@ -340,17 +340,25 @@ pub const ITEMS: &[ItemDef] = &[
     },
 ];
 
+/// Bütün eşya tabloları: `ITEMS` (WoW eşyaları) + `items_metin2::ITEMS_METIN2` (Metin2 kataloğu).
+/// Yeni katalog dosyası = buraya bir satır; `def`, düşürme havuzu ve testler hepsini kapsar.
+pub const ITEM_TABLES: &[&[ItemDef]] = &[ITEMS, super::items_metin2::ITEMS_METIN2];
+
+/// Kayıtlı bütün eşya tanımları (tablo sırasıyla).
+pub fn all_items() -> impl Iterator<Item = &'static ItemDef> {
+    ITEM_TABLES.iter().flat_map(|t| t.iter())
+}
+
 /// Seviyeye uygun rastgele ekipman havuzu (canavar düşürmeleri için).
 pub fn gear_for_level(level: u32) -> Vec<u32> {
-    ITEMS
-        .iter()
+    all_items()
         .filter(|d| d.upgradable() && d.level + 10 >= level && d.level <= level + 3)
         .map(|d| d.vnum)
         .collect()
 }
 
 pub fn def(vnum: u32) -> Option<&'static ItemDef> {
-    ITEMS.iter().find(|d| d.vnum == vnum)
+    all_items().find(|d| d.vnum == vnum)
 }
 
 /// Bir eşya örneği (envanterde / yerde / ekipmanda).
@@ -458,7 +466,7 @@ mod tests {
 
     #[test]
     fn every_icon_is_a_wow_icon() {
-        for d in ITEMS {
+        for d in all_items() {
             let p = format!("Interface/Icons/{}.blp", d.icon);
             assert!(present(&p), "{} ikonu MPQ'da yok: {}", d.name, d.icon);
         }
@@ -467,13 +475,22 @@ mod tests {
     #[test]
     fn vnums_unique_and_vendor_stock_defined() {
         let mut seen = std::collections::HashSet::new();
-        for d in ITEMS {
+        for d in all_items() {
             assert!(seen.insert(d.vnum), "yinelenen vnum {}", d.vnum);
         }
         for stock in [crate::game::ui::shop_ui::GENERAL, crate::game::ui::shop_ui::WEAPONS, crate::game::ui::shop_ui::ARMOR] {
             for (v, _, _) in stock {
                 assert!(def(*v).is_some(), "satıcıdaki {v} tanımsız");
             }
+        }
+    }
+
+    #[test]
+    fn item_tables_cover_all() {
+        assert_eq!(all_items().count(), ITEM_TABLES.iter().map(|t| t.len()).sum::<usize>());
+        assert_eq!(ITEM_TABLES[0].len(), ITEMS.len(), "ITEMS ilk tablo olmalı (Item::def yedeği ITEMS[0])");
+        for d in all_items() {
+            assert_eq!(def(d.vnum).map(|x| x.name), Some(d.name));
         }
     }
 

@@ -68,7 +68,11 @@ Pyungmoo sayfasında listeleniyor; tr-wiki'de yalnızca harita görselinde var).
 | E9 | Görsel cila: parıltı, efektler, köy dekoru | D-11, D-12, D-13, D-15 |
 | E10 | Ses | G-21, D-17 |
 | E11 | Binek (at) | G-22, D-18 |
-| E12 | Kalite ve araçlar | Q-01 … Q-05 |
+| E12 | Kalite ve araçlar | Q-01 … Q-09 |
+| E13 | Ekipman görünümü ve Metin2 silah kataloğu | G-25, D-21 |
+| E14 | Metin2 zindanları (instance) | G-26, G-28, G-29, D-22, D-23 |
+| E15 | Yeni bölge: Westfall | G-24, G-27 |
+| E16 | Efsun ve taş takma | G-30, G-31, D-24 |
 
 ---
 
@@ -564,3 +568,29 @@ Pyungmoo sayfasında listeleniyor; tr-wiki'de yalnızca harita görselinde var).
 | 5 | D-12 büyü efektleri + D-05 minimap | G-18 beceri seviyeleri + G-14 adlı moblar | — |
 | 6 | D-04 beceri penceresi + D-02 HUD | G-19 beceri kitabı + G-08 av görevleri | — |
 | 7+ | D-06, D-13, D-15, D-17, D-18 | G-20, G-21, G-21b, G-22, G-23, G-09 | Q-05 |
+
+---
+
+## 4. Sprint 5 görevleri (2026-10-14) — ayrıntı: `docs/SPRINT_5.md`
+
+Her görev ayrı dal ve ayrı PR. Dosya sahipliği ve içerik kayıt noktaları (G-24 API'si) `SPRINT_5.md`'de.
+
+| Kimlik | Sahip | Öncelik | Dalga | Görev | Dal |
+|---|---|---|---|---|---|
+| G-24 | gameplay-dev | P0 | 0 | Çakışma önleyici refaktör: `zones.rs`, `ITEM_TABLES`, `MOB_TABLES`, NPC zinciri, `metin::spawn_metin`, `physics::INDOOR`, taslak modüller, `mod.rs` satırları (davranış değişmez) | `refactor/icerik-kayitlari` |
+| Q-06 | qa-engineer | P0 | 0 | `display_audit.rs` (`#[ignore]`): ItemDisplay kimliği + MPQ dosya denetimi, `AZM_FIND` | `test/display-denetim` |
+| G-25 | gameplay-dev | P0 | 1 | Ekipman görünümü: `equipment.rs` (`look_from_equip`, `sync_look`, `attach_items`), kask/kalkan/omuzluk | `feat/ekipman-gorunum` |
+| G-26 | gameplay-dev | P0 | 1 | Zindan çekirdeği: instance WMO + çarpışma, kat durum makinesi, giriş/çıkış, bekleme süresi | `feat/zindan-cekirdek` |
+| G-27 | gameplay-dev | P0 | 1 | Westfall Sv 10-20: alt bölgeler, yaratıklar, Old Murk-Eye / Vultros, metin alanları | `feat/westfall` |
+| D-21 | designer | P0 | 1 | Metin2 ikonik silah kataloğu `items_metin2.rs` | `feat/metin2-silahlar` |
+| Q-08 | qa-engineer | P0 | 1→ | Westfall + ekipman QA (ekran görüntüleri) | `test/dalga1` |
+| G-28 | gameplay-dev | P0 | 2 | Örümcek Zindanı (3 kat, Örümcek Kraliçesi, Zehir Kılıcı) | `feat/orumcek-zindani` |
+| G-29 | gameplay-dev | P1 | 2 | Şeytan Kulesi (4 kat MVP, Şeytan Kral, Dolunay / Ejderha Kılıcı) | `feat/seytan-kulesi` |
+| D-22 | designer | P0 | 2 | Zindan UI `ui/dungeon_ui.rs` | `feat/zindan-ui` |
+| D-23 | designer | P1 | 2 | Zindan atmosferi `dungeon/atmos.rs` | `feat/zindan-atmosfer` |
+| Q-07 | qa-engineer | P0 | 2→ | Zindan duman + çarpışma testi | `test/zindan-duman` |
+| G-30 | gameplay-dev | P1 | 3 | Efsun (`Item.bonus`, bonus havuzu, savaş etkisi) | `feat/efsun` |
+| G-31 | gameplay-dev | P1 | 3 | Taş takma (`sockets`, metinlerden düşen taşlar) | `feat/tas-takma` |
+| D-24 | designer | P1 | 3 | Efsun/taş tooltip (Metin2 renkli satırlar) | `feat/efsun-ui` |
+| G-18/19 + D-04 | gameplay-dev / designer | P1 | 3 | Beceri seviyeleri + beceri penceresi (bkz. E7) | `feat/beceri-seviyeleri`, `feat/beceri-penceresi` |
+| Q-09 | qa-engineer | P0 | 3→ | Kayıt uyumluluğu (Sprint 4 kaydı, zindanda kayıt) | `test/kayit-uyum` |
