@@ -59,13 +59,16 @@ pub enum Kind {
         display: u32,
         two_hand: bool,
     },
-    /// Zırh: savunma, +başına savunma, gövde seti.
+    /// Zırh: savunma, +başına savunma, gövde seti ve setin omuzluğu (ItemDisplay; omuz takma
+    /// noktalarına model olarak takılır, `None` = omuzluk yok).
     Armor {
         def: i32,
         per_plus: i32,
         set: ArmorSet,
+        shoulder: Option<u32>,
     },
-    /// Diğer giyilebilirler: yuva + savunma + ek HP.
+    /// Diğer giyilebilirler: yuva + savunma + ek HP. `display` (ItemDisplay, 0 = görünmez): kask ve kalkan
+    /// model olarak takılır, çizme/bileklik zırh setinin çizme/bileklik yuvasının üstüne yazılır.
     Wear {
         slot: EquipSlot,
         def: i32,
@@ -157,13 +160,14 @@ pub(crate) const fn armor(
     def: i32,
     per_plus: i32,
     set: ArmorSet,
+    shoulder: Option<u32>,
     price: u32,
 ) -> ItemDef {
     ItemDef {
         vnum,
         name,
         icon,
-        kind: Kind::Armor { def, per_plus, set },
+        kind: Kind::Armor { def, per_plus, set, shoulder },
         level,
         height: 2,
         stack: 1,
@@ -265,30 +269,31 @@ pub const ITEMS: &[ItemDef] = &[
     weapon(60, "Dal'Rend'in Kutsal Hücumu", "INV_Sword_40", 25, (58, 72), 8, 20009, false, 6000), // Dal'Rend's Sacred Charge
     weapon(65, "Demirdüşman", "INV_Mace_07", 27, (62, 78), 9, 31861, false, 8000), // Ironfoe
     weapon(70, "Arkanit Biçici", "INV_Axe_12", 30, (80, 104), 11, 31694, true, 12000), // Arcanite Reaper
-    weapon(75, "Quel'Serrar", "INV_Sword_57", 32, (74, 92), 10, 33729, false, 16000), // Quel'Serrar
+    weapon(75, "Quel'Serrar", "INV_Sword_57", 32, (74, 92), 10, 33839, false, 16000), // Quel'Serrar
     weapon(80, "Külgetiren", "INV_Sword_48", 35, (100, 130), 14, 23875, true, 25000), // Ashbringer
     // --- Zırh setleri (savaşçı plaka; 8 yuva: gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard) ---
     armor(11200, "Kızıl Haçlı Zırhı", "INV_Chest_Chain_05", 1, 12, 3, // Chain of the Scarlet Crusade
-        [None, Some(5317), Some(5319), Some(5320), Some(5321), Some(5322), Some(5323), Some(3865)], 100),
+        // Crusader kemer/çizme/bileklik/eldiven dokuları MPQ'da yok (Q-06): o yuvalar Gümüş Plaka.
+        [None, Some(6147), Some(3418), Some(5320), Some(25828), Some(4448), Some(25831), Some(3865)], Some(6141), 100),
     armor(11210, "Cesaret Savaş Takımı", "INV_Chest_Plate03", 9, 24, 5, // Battlegear of Valor (T0)
-        [None, Some(29958), Some(29959), Some(29963), Some(29960), Some(29961), Some(29962), None], 2000),
+        [None, Some(29958), Some(29959), Some(29963), Some(29960), Some(29961), Some(29962), None], Some(29964), 2000),
     armor(11220, "Kudret Savaş Takımı", "INV_Chest_Plate16", 18, 40, 7, // Battlegear of Might (T1)
-        [None, Some(31021), Some(31019), Some(31023), Some(31025), Some(31020), Some(31022), None], 8000),
+        [None, Some(31021), Some(31019), Some(31023), Some(31025), Some(31020), Some(31022), None], Some(31024), 8000),
     armor(11230, "Gazap Savaş Takımı", "INV_Chest_Plate16", 26, 62, 9, // Battlegear of Wrath (T2)
-        [None, Some(33628), Some(33632), Some(33630), Some(33631), Some(33627), Some(33629), None], 20000),
+        [None, Some(33628), Some(33632), Some(33630), Some(33631), Some(33627), Some(33629), None], Some(33679), 20000),
     armor(11240, "Korkusuz Savaş Takımı", "INV_Chest_Plate02", 34, 80, 11, // Dreadnaught's Battlegear (T3)
-        [None, Some(35049), Some(35058), Some(35192), Some(35193), Some(35044), Some(35194), None], 32000),
-    // --- Miğfer / kalkan / çizme ---
-    wear(12200, "Barbar Demir Miğferi", "INV_Helmet_02", 1, EquipSlot::Helmet, 4, 0, 1, 0, 80), // Barbaric Iron Helm
-    wear(12210, "Aslanyürek Miğferi", "INV_Helmet_13", 15, EquipSlot::Helmet, 10, 0, 2, 0, 1500), // Lionheart Helm
-    wear(13000, "Aşınmış Tahta Kalkan", "INV_Shield_09", 1, EquipSlot::Shield, 5, 0, 2, 0, 90), // Worn Wooden Shield
-    wear(13010, "Kafatası Alevi Kalkanı", "INV_Shield_04", 21, EquipSlot::Shield, 14, 0, 3, 0, 2500), // Skullflame Shield
-    wear(15000, "Acemi Çizmeleri", "INV_Boots_01", 1, EquipSlot::Shoes, 2, 0, 1, 0, 60), // Recruit's Boots
-    wear(15010, "Barbar Demir Çizmeleri", "INV_Boots_Plate_03", 20, EquipSlot::Shoes, 6, 0, 2, 0, 1800), // Barbaric Iron Boots
+        [None, Some(35049), Some(35058), Some(35192), Some(35193), Some(35044), Some(35194), None], Some(35189), 32000),
+    // --- Miğfer / kalkan / çizme (görünümler Q-06 denetiminden: model + doku MPQ'da tam) ---
+    wear(12200, "Barbar Demir Miğferi", "INV_Helmet_02", 1, EquipSlot::Helmet, 4, 0, 1, 1132, 80), // Barbaric Iron Helm
+    wear(12210, "Aslanyürek Miğferi", "INV_Helmet_13", 15, EquipSlot::Helmet, 10, 0, 2, 22901, 1500), // Lionheart Helm
+    wear(13000, "Aşınmış Tahta Kalkan", "INV_Shield_09", 1, EquipSlot::Shield, 5, 0, 2, 18653, 90), // Worn Wooden Shield
+    wear(13010, "Kafatası Alevi Kalkanı", "INV_Shield_04", 21, EquipSlot::Shield, 14, 0, 3, 23825, 2500), // Skullflame Shield
+    wear(15000, "Acemi Çizmeleri", "INV_Boots_01", 1, EquipSlot::Shoes, 2, 0, 1, 2229, 60), // Recruit's Boots
+    wear(15010, "Barbar Demir Çizmeleri", "INV_Boots_Plate_03", 20, EquipSlot::Shoes, 6, 0, 2, 25828, 1800), // Barbaric Iron Boots
     // --- Bileklik / kolye / yüzük ---
-    wear(14000, "Bakır Bileklikler", "INV_Bracer_07", 1, EquipSlot::Bracelet, 0, 40, 15, 0, 60), // Copper Bracers
-    wear(14010, "Kızıl Bilek Koruyucuları", "INV_Bracer_03", 18, EquipSlot::Bracelet, 0, 160, 30, 0, 1500), // Scarlet Wristguards
-    wear(14020, "Cesaret Bileklikleri", "INV_Bracer_18", 24, EquipSlot::Bracelet, 0, 240, 40, 0, 3000), // Bracers of Valor
+    wear(14000, "Bakır Bileklikler", "INV_Bracer_07", 1, EquipSlot::Bracelet, 0, 40, 15, 3622, 60), // Copper Bracers
+    wear(14010, "Kızıl Bilek Koruyucuları", "INV_Bracer_03", 18, EquipSlot::Bracelet, 0, 160, 30, 4448, 1500), // Scarlet Wristguards
+    wear(14020, "Cesaret Bileklikleri", "INV_Bracer_18", 24, EquipSlot::Bracelet, 0, 240, 40, 29961, 3000), // Bracers of Valor
     wear(16000, "Myzrael'in Kolyesi", "INV_Jewelry_Necklace_04", 1, EquipSlot::Necklace, 0, 60, 20, 0, 60), // Pendant of Myzrael
     wear(16005, "Canavarın Gözü", "INV_Jewelry_Necklace_09", 9, EquipSlot::Necklace, 0, 110, 25, 0, 600), // Eye of the Beast
     wear(16010, "Fordring'in Nişanı", "INV_Jewelry_Amulet_02", 27, EquipSlot::Necklace, 0, 260, 45, 0, 4000), // Mark of Fordring
@@ -491,6 +496,27 @@ mod tests {
         assert_eq!(ITEM_TABLES[0].len(), ITEMS.len(), "ITEMS ilk tablo olmalı (Item::def yedeği ITEMS[0])");
         for d in all_items() {
             assert_eq!(def(d.vnum).map(|x| x.name), Some(d.name));
+        }
+    }
+
+    #[test]
+    fn visible_gear_has_display_ids() {
+        // G-25: kask, kalkan, çizme, bileklik görünür olmalı (kolye/yüzük görünümsüz); setlerin omuzluğu var.
+        for d in all_items() {
+            match d.kind {
+                Kind::Wear { slot, display, .. } => {
+                    let visible = matches!(
+                        slot,
+                        EquipSlot::Helmet | EquipSlot::Shield | EquipSlot::Shoes | EquipSlot::Bracelet
+                    );
+                    assert_eq!(display != 0, visible, "{} görünüm kimliği", d.name);
+                }
+                Kind::Armor { set, shoulder, .. } => {
+                    assert!(shoulder.is_some(), "{} omuzluksuz", d.name);
+                    assert!(set[1].is_some(), "{} göğüssüz", d.name);
+                }
+                _ => {}
+            }
         }
     }
 
