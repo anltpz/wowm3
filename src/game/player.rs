@@ -20,6 +20,13 @@ pub struct Player {
     /// Zıplamada (dikey hız `vy`).
     pub airborne: bool,
     pub vy: f32,
+    /// Bu karedeki hareket girdisi karakter ekseninde (x = sağa yan adım, y = ileri); gövde yönü ve
+    /// animasyon için.
+    pub move_local: Vec2,
+    /// Yerinde dönüş yönü (+ sola, - sağa; 0 dönmüyor).
+    pub turning: f32,
+    /// Bu karedeki gerçek hız (m/sn), animasyon hızını eşlemek için.
+    pub cur_speed: f32,
 }
 
 /// Oyuncunun giydiği görünüm; `dirty` olunca gövde yeniden kurulur.
@@ -83,6 +90,9 @@ fn spawn_player(mut commands: Commands) {
             backward: false,
             airborne: false,
             vy: 0.0,
+            move_local: Vec2::ZERO,
+            turning: 0.0,
+            cur_speed: 0.0,
         },
         Transform::from_translation(start),
         Visibility::default(),
@@ -278,6 +288,9 @@ pub fn move_player(
     }
     p.backward = manual && fwd_in < 0.0;
     p.moving = dir != Vec3::ZERO;
+    p.move_local = if manual { Vec2::new(strafe.clamp(-1.0, 1.0), fwd_in.clamp(-1.0, 1.0)) } else if p.moving { Vec2::Y } else { Vec2::ZERO };
+    p.turning = if p.moving { 0.0 } else { turn };
+    p.cur_speed = if !p.moving { 0.0 } else if p.backward { p.speed * BACK_MUL } else { p.speed };
     if p.moving {
         // Geri yürüme WoW'daki gibi yavaş (4.5 / 7).
         let speed = if p.backward { p.speed * BACK_MUL } else { p.speed };
@@ -325,18 +338,24 @@ pub fn yaw_of(q: Quat) -> f32 {
     (-f.x).atan2(-f.z)
 }
 
+/// WoW hareket animasyonu: koşu hızı yürüme hızıyla eşleşir (7 m/sn = 1×), yan adımda ve çaprazda gövde
+/// gidilen yöne döner (karakterin bakış yönü değişmez), geri geri yürürken arka yürüme, yerinde dönerken
+/// "shuffle" adımları. Hareket ederken tam gövde saldırı/beceri animasyonu oynatılmaz (bacaklar kaymasın).
 fn animate_player(
+    time: Res<Time>,
     player: Query<&Player>,
     look: Res<PlayerLook>,
     stats: Res<super::stats::PlayerStats>,
-    mut body: Query<&mut AnimState, With<Body>>,
+    lock: Res<super::combat::SkillLock>,
+    mut body: Query<(&mut AnimState, &mut Transform), With<Body>>,
 ) {
-    let (Ok(p), Ok(mut st)) = (player.single(), body.single_mut()) else {
+    let (Ok(p), Ok((mut st, mut bxf))) = (player.single(), body.single_mut()) else {
         return;
     };
     if stats.dead {
         return;
     }
+    let ml = p.move_local;
     let idle = if stats.riding {
         anim::MOUNT
     } else if p.airborne {
@@ -345,10 +364,41 @@ fn animate_player(
         anim::WALK_BACK
     } else if p.moving {
         anim::RUN
+    } else if p.turning > 0.0 {
+        anim::SHUFFLE_LEFT
+    } else if p.turning < 0.0 {
+        anim::SHUFFLE_RIGHT
     } else if look.weapon.is_some() {
         if look.two_hand { anim::READY_2H } else { anim::READY_1H }
     } else {
         anim::STAND
     };
+    if p.moving && st.busy() && !lock.0 {
+        // Koşarken bir kerelik (saldırı) animasyonu bacakları dondurur: koşuya dön.
+        st.once = false;
+    }
     st.set_loop(idle);
+    if !st.busy() {
+        st.speed = match idle {
+            anim::RUN => (p.cur_speed / RUN_ANIM_SPEED).clamp(0.5, 2.5),
+            anim::WALK_BACK => (p.cur_speed / BACK_ANIM_SPEED).clamp(0.5, 2.5),
+            _ => 1.0,
+        };
+    }
+    // Gövde yönü (binekte gövde atın üstünde, Kılıç Çevirme gövdeyi kendisi döndürür).
+    if !stats.riding && !lock.0 {
+        let yaw = if ml == Vec2::ZERO {
+            0.0
+        } else if ml.y < 0.0 {
+            ml.x.atan2(-ml.y)
+        } else {
+            (-ml.x).atan2(ml.y)
+        };
+        let want = Quat::from_rotation_y(yaw);
+        bxf.rotation = bxf.rotation.slerp(want, (time.delta_secs() * 12.0).min(1.0));
+    }
 }
+
+/// İnsan koşu ve geri yürüme animasyonlarının doğal hızları (m/sn).
+const RUN_ANIM_SPEED: f32 = 7.0;
+const BACK_ANIM_SPEED: f32 = 4.5;

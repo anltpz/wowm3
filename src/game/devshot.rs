@@ -8,6 +8,34 @@ pub fn plugin(app: &mut App) {
     if std::env::var("AZM_SHOT").is_ok() {
         app.add_systems(Update, shoot_and_exit);
     }
+    if std::env::var("AZM_KEYS").is_ok() {
+        app.add_systems(PreUpdate, hold_keys.after(bevy::input::InputSystems));
+    }
+}
+
+/// `AZM_KEYS=e,w` (harf ya da `space`): 6. saniyeden sonra bu tuşları basılı tutar (hareket testleri).
+fn hold_keys(time: Res<Time>, mut keys: ResMut<ButtonInput<KeyCode>>, mut list: Local<Option<Vec<KeyCode>>>) {
+    let list = list.get_or_insert_with(|| {
+        std::env::var("AZM_KEYS")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|k| match k.trim().to_ascii_lowercase().as_str() {
+                "w" => Some(KeyCode::KeyW),
+                "a" => Some(KeyCode::KeyA),
+                "s" => Some(KeyCode::KeyS),
+                "d" => Some(KeyCode::KeyD),
+                "q" => Some(KeyCode::KeyQ),
+                "e" => Some(KeyCode::KeyE),
+                "space" => Some(KeyCode::Space),
+                _ => None,
+            })
+            .collect()
+    });
+    if time.elapsed_secs() > 6.0 {
+        for k in list.iter() {
+            keys.press(*k);
+        }
+    }
 }
 
 fn shoot_and_exit(

@@ -36,6 +36,8 @@ pub mod anim {
     /// Binek üstünde oturma.
     pub const MOUNT: u16 = 91;
     pub const WALK_BACK: u16 = 13;
+    pub const SHUFFLE_LEFT: u16 = 11;
+    pub const SHUFFLE_RIGHT: u16 = 12;
     pub const JUMP: u16 = 38;
 }
 
@@ -390,6 +392,8 @@ fn fallback(id: u16) -> &'static [u16] {
         anim::COMBAT_WOUND => &[anim::COMBAT_WOUND],
         anim::MOUNT => &[anim::MOUNT, anim::STAND],
         anim::WALK_BACK => &[anim::WALK_BACK, anim::WALK, anim::RUN],
+        anim::SHUFFLE_LEFT => &[anim::SHUFFLE_LEFT, anim::WALK, anim::STAND],
+        anim::SHUFFLE_RIGHT => &[anim::SHUFFLE_RIGHT, anim::WALK, anim::STAND],
         anim::JUMP => &[anim::JUMP, anim::STAND],
         _ => &[],
     }

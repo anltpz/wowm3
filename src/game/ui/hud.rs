@@ -1,8 +1,9 @@
 //! Ana HUD — WoW 1.12 arayüz dokularıyla (MPQ Interface/), kendi çizimimiz yok denecek kadar az:
-//! - Altta: WoW MainMenuBar şeritleri (12 slot: 1-4 beceri, F1-F4 iksir, çanta, yardım), üstünde
-//!   UI-StatusBar EXP çubuğu; iki yanda HP/SP küreleri (TempPortraitAlphaMask diski + MiniMap-TrackingBorder
-//!   altın halkası, alttan dolar) ve grifon uç kapakları.
-//! - Sol üstte WoW PlayerFrame (UI-TargetingFrame, aynalanmış), üstte TargetFrame (NoMana / Elite),
+//! - Altta: WoW 1.12 MainMenuBar birebir (FrameXML MainMenuBar.xml): 1024×43 dört atlas şeridi, üstünde
+//!   1024×10 EXP çubuğu, iki uçta grifonlar; eylem slotları x = 8 + 42·i (1-4 beceri, F1-F4 iksir), yardım
+//!   mikro düğme yerinde, çanta sırt çantası yerinde. Küre yok (WoW'da yok).
+//! - Sol üstte WoW PlayerFrame, yanında TargetFrame (PlayerFrame.xml / TargetFrame.xml konumları); çubuk
+//!   üstündeki sayılar WoW'daki gibi yalnızca fare çerçevenin üstündeyken görünür.
 //!   sağ üstte WoW mini harita çerçevesi (UI-Minimap-Border, ObjectIcons, MinimapArrow) + görev,
 //!   sol altta sohbet kutusu, ortada duyuru; ölüm ve yardım katmanları.
 
@@ -11,7 +12,7 @@ use bevy::ui::RelativeCursorPosition;
 
 use benilla_assets::WorldAssets;
 
-use super::{icon, text, thousands, BlocksWorld, UiAssets, Windows, GOLD, TEXT, TEXT_DIM};
+use super::{icon, text, BlocksWorld, UiAssets, Windows, GOLD, TEXT};
 use crate::game::camera::OrbitCam;
 use crate::game::combat::{Dying, Enemy, Health, PlayerTarget};
 use crate::game::inventory::Inventory;
@@ -42,25 +43,18 @@ impl Default for QuickSlots {
 pub const QUICK_KEYS: [KeyCode; 4] = [KeyCode::F1, KeyCode::F2, KeyCode::F3, KeyCode::F4];
 const QUICK_LABELS: [&str; 4] = ["F1", "F2", "F3", "F4"];
 
-/// Küre çapı (piksel).
-const ORB_PX: f32 = 112.0;
-/// Ana çubuk (2 şerit × 256) genişliği ve alt çubuk kabının genişliği.
-const BAR_W: f32 = 512.0;
-const HUD_W: f32 = 920.0;
-/// Şeritlerin kap içindeki sol kenarı.
-const BAR_X: f32 = (HUD_W - BAR_W) / 2.0;
+/// WoW MainMenuBar genişliği (4 × 256 şerit).
+const HUD_W: f32 = 1024.0;
+const BAR_X: f32 = 0.0;
 /// WoW eylem slotu: 36 px, şeritte x = 8 + 42·i.
 const SLOT: f32 = 36.0;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 enum HudText {
-    HpOrb,
-    SpOrb,
     FrameName,
     FrameHp,
     FrameSp,
     Exp,
-    Yang,
     TargetName,
     TargetHp,
     TargetLevel,
@@ -75,9 +69,16 @@ enum HudText {
 #[derive(Resource)]
 struct HudBuilt;
 
-/// Kürenin dolu kısmı (yüksekliği yüzde ile değişir); `true` HP, `false` SP.
-#[derive(Component)]
-struct OrbFill(bool);
+/// Yalnızca fare üstündeyken görünen yazı (WoW çubuk metinleri): hangi çerçeveye bağlı.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+enum HoverText {
+    Player,
+    Target,
+    Exp,
+}
+/// Fare üstüne gelince yazılarını gösteren alan.
+#[derive(Component, Clone, Copy)]
+struct HoverArea(HoverText);
 #[derive(Component)]
 struct PlayerArrow;
 
@@ -135,6 +136,7 @@ pub fn plugin(app: &mut App) {
             build.run_if(resource_exists::<UiAssets>.and(resource_exists::<WorldAssets>)),
             (
                 update_bars,
+                hover_texts,
                 update_target,
                 update_log,
                 update_quick,
@@ -189,10 +191,9 @@ fn build(
     let endcap = ic("Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Human.blp");
     let bar = ic("Interface\\MainMenuBar\\UI-MainMenuBar-Human.blp");
     let status = ic("Interface\\TargetingFrame\\UI-StatusBar.blp");
-    let mask = ic("Interface\\CharacterFrame\\TempPortraitAlphaMask.blp");
-    let ring = ic("Interface\\Minimap\\MiniMap-TrackingBorder.blp");
     let frame = ic("Interface\\TargetingFrame\\UI-TargetingFrame.blp");
-    let target_nomana = ic("Interface\\TargetingFrame\\UI-TargetingFrame-NoMana.blp");
+    let mask = ic("Interface\\CharacterFrame\\TempPortraitAlphaMask.blp");
+    let level_bg = ic("Interface\\TargetingFrame\\UI-TargetingFrame-LevelBackground.blp");
     let portrait = ic("Interface\\CharacterFrame\\TemporaryPortrait-Male-Human.blp");
     let monster = ic("Interface\\CharacterFrame\\TemporaryPortrait-Monster.blp");
     let mm_border = ic("Interface\\Minimap\\UI-Minimap-Border.blp");
@@ -215,7 +216,7 @@ fn build(
         ..default()
     };
 
-    // ===== Alt çubuk (WoW MainMenuBar) =====
+    // ===== Alt çubuk: WoW MainMenuBar (1024×53) =====
     commands
         .spawn((
             Node {
@@ -224,75 +225,46 @@ fn build(
                 left: Val::Percent(50.0),
                 margin: UiRect::left(px(-HUD_W / 2.0)),
                 width: px(HUD_W),
-                height: px(128),
+                height: px(53),
                 ..default()
             },
             RelativeCursorPosition::default(),
             BlocksWorld,
         ))
         .with_children(|bar_root| {
-            // Grifonlar (kürelerin arkasında).
-            let cap = |flip: bool| ImageNode { image: endcap.clone(), rect: Some(Rect::new(0.0, 43.0, 128.0, 128.0)), flip_x: flip, ..default() };
-            bar_root.spawn((abs(BAR_X - ORB_PX - 92.0, 0.0, 128.0, 85.0), cap(false), ZIndex(0)));
-            bar_root.spawn((abs(BAR_X + BAR_W + ORB_PX - 36.0, 0.0, 128.0, 85.0), cap(true), ZIndex(0)));
-            // Ana çubuk şeritleri (atlasın 1. ve 2. eylem şeritleri) + üst raylar.
-            bar_root.spawn((abs(BAR_X, 0.0, 256.0, 44.0), atlas(212.0, 256.0), ZIndex(1)));
-            bar_root.spawn((abs(BAR_X + 256.0, 0.0, 256.0, 44.0), atlas(148.0, 192.0), ZIndex(1)));
-            // EXP çubuğu: UI-StatusBar (WoW mor), alt ve üst ray atlastan.
-            bar_root.spawn((abs(BAR_X, 44.0, BAR_W, 10.0), ImageNode { image: status.clone(), color: Color::srgba(0.12, 0.0, 0.12, 0.9), ..default() }, ZIndex(1)))
+            // Grifonlar: sol uç BOTTOM, çubuğun sol kenarı -32; sağ uç aynalı, +32 (MainMenuBar.xml).
+            let cap = |flip: bool| ImageNode { image: endcap.clone(), flip_x: flip, ..default() };
+            bar_root.spawn((abs(-96.0, 0.0, 128.0, 128.0), cap(false), ZIndex(3)));
+            bar_root.spawn((abs(HUD_W - 32.0, 0.0, 128.0, 128.0), cap(true), ZIndex(3)));
+            // Dört şerit (MainMenuBarTexture0-3: texcoord üstleri 0.832 / 0.582 / 0.332 / 0.082).
+            for (k, y0) in [212.0f32, 148.0, 84.0, 20.0].into_iter().enumerate() {
+                bar_root.spawn((abs(256.0 * k as f32, 0.0, 256.0, 44.0), atlas(y0, y0 + 44.0), ZIndex(1)));
+            }
+            // EXP çubuğu 1024×10: UI-StatusBar (WoW mor 0.58, 0, 0.55) + üstünde atlasın XP çerçeve satırları.
+            bar_root
+                .spawn((
+                    abs(0.0, 43.0, HUD_W, 10.0),
+                    ImageNode { image: status.clone(), color: Color::srgba(0.0, 0.0, 0.0, 0.5), ..default() },
+                    RelativeCursorPosition::default(),
+                    HoverArea(HoverText::Exp),
+                    ZIndex(1),
+                ))
                 .with_children(|x| {
                     x.spawn((
                         Node { position_type: PositionType::Absolute, left: px(0), top: px(0), height: Val::Percent(100.0), width: Val::Percent(0.0), ..default() },
                         ImageNode { image: status.clone(), color: Color::srgb(0.58, 0.0, 0.55), ..default() },
                         ExpFill,
                     ));
-                    x.spawn((
-                        Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
-                        children![(text(&ui, "", 9.0, TEXT), TextShadow::default(), HudText::Exp)],
-                    ));
-                });
-            for (i, y) in [(0.0f32, 202.0f32), (256.0, 138.0)] {
-                bar_root.spawn((abs(BAR_X + i, 54.0, 256.0, 4.0), atlas(y, y + 4.0), ZIndex(1)));
-                bar_root.spawn((abs(BAR_X + i, 40.0, 256.0, 4.0), atlas(y, y + 4.0), ZIndex(2)));
-            }
-            // Güçlendirmeler + Yang (EXP çubuğunun üstünde).
-            bar_root
-                .spawn(Node {
-                    position_type: PositionType::Absolute,
-                    left: px(BAR_X + 4.0),
-                    bottom: px(62),
-                    width: px(BAR_W - 8.0),
-                    height: px(30),
-                    column_gap: px(4),
-                    align_items: AlignItems::Center,
-                    ..default()
-                })
-                .with_children(|r| {
-                    for (img, col, marker, label) in [
-                        (rage.clone(), Color::srgb(0.9, 0.3, 0.2), true, HudText::RageTime),
-                        (steed.clone(), Color::srgb(0.45, 0.75, 1.0), false, HudText::MountTime),
-                    ] {
-                        let mut e = r.spawn((
-                            Node { width: px(28), height: px(28), border: UiRect::all(px(1)), ..default() },
-                            ImageNode::new(img),
-                            BorderColor::all(col),
-                            Visibility::Hidden,
-                        ));
-                        if marker {
-                            e.insert(RageBuff);
-                        } else {
-                            e.insert(MountBuff);
-                        }
-                        e.with_child((
-                            Node { position_type: PositionType::Absolute, bottom: px(-2), right: px(1), ..default() },
-                            text(&ui, "", 11.0, TEXT),
-                            TextShadow::default(),
-                            label,
+                    for (k, y0) in [192.0f32, 128.0, 64.0, 0.0].into_iter().enumerate() {
+                        x.spawn((
+                            Node { position_type: PositionType::Absolute, left: px(256.0 * k as f32), top: px(0), width: px(256), height: px(10), ..default() },
+                            ImageNode { image: bar.clone(), rect: Some(Rect::new(0.0, y0, 256.0, y0 + 11.0)), flip_y: true, ..default() },
                         ));
                     }
-                    r.spawn((Node { flex_grow: 1.0, ..default() },));
-                    // SP küresinin altında kalmasın.
-                    r.spawn((Node { margin: UiRect::right(px(28)), ..default() }, children![(text(&ui, "", 13.0, GOLD), TextShadow::default(), HudText::Yang)]));
+                    x.spawn((
+                        Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
+                        children![(text(&ui, "", 10.0, TEXT), wow_shadow(), HudText::Exp, HoverText::Exp, Visibility::Hidden)],
+                    ));
                 });
             // Slotlar 0-3: beceriler.
             for i in 0..4 {
@@ -305,12 +277,12 @@ fn build(
                     ));
                     s.spawn((
                         Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
-                        children![(text(&ui, "", 15.0, TEXT), TextShadow::default(), SkillCdText(i))],
+                        children![(text(&ui, "", 15.0, TEXT), wow_shadow(), SkillCdText(i))],
                     ));
                     s.spawn((
-                        Node { position_type: PositionType::Absolute, right: px(2), top: px(0), ..default() },
-                        text(&ui, (i + 1).to_string(), 11.0, TEXT_DIM),
-                        TextShadow::default(),
+                        Node { position_type: PositionType::Absolute, right: px(2), top: px(1), ..default() },
+                        text(&ui, (i + 1).to_string(), 10.0, Color::srgb(0.6, 0.6, 0.6)),
+                        wow_shadow(),
                     ));
                 });
             }
@@ -319,48 +291,85 @@ fn build(
                 bar_root.spawn((slot_node(slot_x(4 + i)), QuickSlotNode(i))).with_children(|s| {
                     s.spawn((Node { width: px(SLOT), height: px(SLOT), ..default() }, ImageNode::default(), Visibility::Hidden, QuickIcon(i)));
                     s.spawn((
-                        Node { position_type: PositionType::Absolute, right: px(2), top: px(0), ..default() },
-                        text(&ui, QUICK_LABELS[i], 10.0, TEXT_DIM),
-                        TextShadow::default(),
+                        Node { position_type: PositionType::Absolute, right: px(2), top: px(1), ..default() },
+                        text(&ui, QUICK_LABELS[i], 10.0, Color::srgb(0.6, 0.6, 0.6)),
+                        wow_shadow(),
                     ));
                     s.spawn((
                         Node { position_type: PositionType::Absolute, right: px(2), bottom: px(0), ..default() },
                         text(&ui, "", 12.0, TEXT),
-                        TextShadow::default(),
+                        wow_shadow(),
                         QuickCount(i),
                     ));
                 });
             }
-            // Slot 10-11: çanta, yardım.
-            for (k, (b, img)) in [(MenuBtn::Inventory, bag), (MenuBtn::Help, book)].into_iter().enumerate() {
-                bar_root.spawn((slot_node(slot_x(10 + k)), Button, ImageNode::new(img), b));
+            // Yardım: ilk mikro düğme yerinde (x 552); çanta: sırt çantası yerinde (sağdan 6, 37×37).
+            bar_root.spawn((
+                Node { position_type: PositionType::Absolute, left: px(552), bottom: px(4), width: px(SLOT), height: px(SLOT), ..default() },
+                Button,
+                ImageNode::new(book),
+                MenuBtn::Help,
+                ZIndex(3),
+            ));
+            bar_root.spawn((
+                Node { position_type: PositionType::Absolute, left: px(HUD_W - 6.0 - 37.0), bottom: px(3), width: px(37), height: px(37), ..default() },
+                Button,
+                ImageNode::new(bag),
+                MenuBtn::Inventory,
+                ZIndex(3),
+            ));
+        });
+
+    // ===== Güçlendirmeler: WoW BuffFrame (sağ üst, mini haritanın solu) =====
+    commands
+        .spawn(Node {
+            position_type: PositionType::Absolute,
+            right: px(MM_PX + 8.0),
+            top: px(13),
+            column_gap: px(4),
+            ..default()
+        })
+        .with_children(|r| {
+            for (img, marker, label) in [(rage.clone(), true, HudText::RageTime), (steed.clone(), false, HudText::MountTime)] {
+                let mut e = r.spawn((
+                    Node { width: px(32), height: px(32), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() },
+                    Visibility::Hidden,
+                ));
+                if marker {
+                    e.insert(RageBuff);
+                } else {
+                    e.insert(MountBuff);
+                }
+                e.with_children(|b| {
+                    b.spawn((Node { width: px(32), height: px(32), ..default() }, ImageNode::new(img)));
+                    b.spawn((text(&ui, "", 10.0, GOLD), wow_shadow(), label));
+                });
             }
-            // Küreler.
-            orb(bar_root, &ui, &mask, &ring, BAR_X - ORB_PX + 10.0, true, HudText::HpOrb);
-            orb(bar_root, &ui, &mask, &ring, BAR_X + BAR_W - 10.0, false, HudText::SpOrb);
         });
 
     // ===== Sol üst: WoW PlayerFrame (232×100, UI-TargetingFrame aynalı) =====
     unit_frame(&mut commands, &ui, UnitFrame {
-        left: 0.0,
+        left: -19.0,
         art: ImageNode { image: frame.clone(), rect: Some(Rect::new(24.0, 0.0, 256.0, 100.0)), flip_x: true, ..default() },
         portrait: portrait.clone(),
         portrait_x: 42.0,
         bars_x: 106.0,
         level_x: 41.0,
         status: status.clone(),
+        name_bg: None,
         player: true,
     });
 
     // ===== Üst: WoW TargetFrame =====
     unit_frame(&mut commands, &ui, UnitFrame {
         left: 250.0,
-        art: ImageNode { image: target_nomana.clone(), rect: Some(Rect::new(24.0, 0.0, 256.0, 100.0)), ..default() },
+        art: ImageNode { image: frame.clone(), rect: Some(Rect::new(24.0, 0.0, 256.0, 100.0)), ..default() },
         portrait: monster.clone(),
         portrait_x: 126.0,
-        bars_x: 6.0,
+        bars_x: 7.0,
         level_x: 167.0,
         status: status.clone(),
+        name_bg: Some(level_bg.clone()),
         player: false,
     });
 
@@ -517,54 +526,15 @@ fn build(
 /// Mini harita dokusunun ekrandaki boyu.
 const MM_PX: f32 = 240.0;
 
-/// Küre: WoW yuvarlak maskesi koyu (boş) + aynı disk renkli ve alttan kırpılmış (dolu) + altın halka.
-fn orb(parent: &mut ChildSpawnerCommands, ui: &UiAssets, mask: &Handle<Image>, ring: &Handle<Image>, left: f32, hp: bool, label: HudText) {
-    let (full, empty) = if hp {
-        (Color::srgb(0.85, 0.05, 0.03), Color::srgba(0.12, 0.0, 0.0, 0.92))
-    } else {
-        (Color::srgb(0.08, 0.25, 0.95), Color::srgba(0.0, 0.02, 0.12, 0.92))
-    };
-    parent
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(left),
-                bottom: px(4),
-                width: px(ORB_PX),
-                height: px(ORB_PX),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            ZIndex(4),
-        ))
-        .with_children(|o| {
-            let fill_abs = Node { position_type: PositionType::Absolute, left: px(0), bottom: px(0), width: px(ORB_PX), height: px(ORB_PX), ..default() };
-            o.spawn((fill_abs.clone(), ImageNode { image: mask.clone(), color: empty, ..default() }));
-            o.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    bottom: px(0),
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    overflow: Overflow::clip(),
-                    ..default()
-                },
-                OrbFill(hp),
-            ))
-            .with_child((fill_abs, ImageNode { image: mask.clone(), color: full, ..default() }));
-            // Halka dokusu 38/64'lük köşede; disk kenarını örtsün diye biraz taşar.
-            o.spawn((
-                Node { position_type: PositionType::Absolute, left: px(-9), top: px(-9), width: px(ORB_PX + 18.0), height: px(ORB_PX + 18.0), ..default() },
-                ImageNode { image: ring.clone(), rect: Some(Rect::new(1.0, 1.0, 39.0, 39.0)), ..default() },
-            ));
-            o.spawn((text(ui, "", 13.0, TEXT), TextShadow::default(), label));
-        });
+/// WoW yazı gölgesi (GameFont'lar: 1 px siyah).
+fn wow_shadow() -> TextShadow {
+    TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::BLACK }
 }
 
-/// WoW birim çerçevesi (PlayerFrame / TargetFrame, 232×100): portre, çerçeve dokusu, ad, seviye,
-/// UI-StatusBar can (yeşil) ve mana (mavi) çubukları. Konumlar FrameXML'deki gibi.
+/// WoW birim çerçevesi (PlayerFrame.xml / TargetFrame.xml, 232×100): yarı saydam siyah arka plan
+/// (119×41), portre (64×64), çerçeve dokusu, ad (GameFontNormalSmall, altın), seviye, UI-StatusBar can
+/// (yeşil) ve mana (mavi) çubukları (119×12). Hedefte adın arkasında düşmanlık rengi şerit. Çubuk sayıları
+/// yalnızca fare üstündeyken.
 struct UnitFrame {
     left: f32,
     art: ImageNode,
@@ -573,6 +543,7 @@ struct UnitFrame {
     bars_x: f32,
     level_x: f32,
     status: Handle<Image>,
+    name_bg: Option<Handle<Image>>,
     player: bool,
 }
 
@@ -587,32 +558,26 @@ fn unit_frame(commands: &mut Commands, ui: &UiAssets, f: UnitFrame) {
         align_items: AlignItems::Center,
         ..default()
     };
-    let mut root = commands.spawn(Node {
-        position_type: PositionType::Absolute,
-        left: px(f.left),
-        top: px(4),
-        width: px(232),
-        height: px(100),
-        ..default()
-    });
+    let hover = if f.player { HoverText::Player } else { HoverText::Target };
+    let mut root = commands.spawn((
+        Node { position_type: PositionType::Absolute, left: px(f.left), top: px(4), width: px(232), height: px(100), ..default() },
+        RelativeCursorPosition::default(),
+        HoverArea(hover),
+    ));
     if !f.player {
         root.insert((Visibility::Hidden, TargetFrame));
     }
     root.with_children(|c| {
-        // Portre (yuvarlak), çerçevenin altında.
+        c.spawn((at(f.bars_x, 22.0, 119.0, 41.0), BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.5)), ZIndex(0)));
+        if let Some(bg) = &f.name_bg {
+            c.spawn((at(f.bars_x, 22.0, 119.0, 19.0), ImageNode { image: bg.clone(), color: Color::srgb(1.0, 0.0, 0.0), ..default() }, TargetNameBg, ZIndex(0)));
+        }
         c.spawn((
             Node { border_radius: BorderRadius::all(px(32)), overflow: Overflow::clip(), ..at(f.portrait_x, 12.0, 64.0, 64.0) },
             ZIndex(0),
             children![(Node { width: px(64), height: px(64), ..default() }, ImageNode::new(f.portrait.clone()))],
         ));
-        // Çubuklar (çerçevenin altında kalır, çerçevedeki yuvaya oturur).
-        let bar = |y: f32| {
-            (
-                at(f.bars_x, y, 119.0, 12.0),
-                ImageNode { image: f.status.clone(), color: Color::srgba(0.0, 0.0, 0.0, 0.6), ..default() },
-                ZIndex(0),
-            )
-        };
+        let bar = |y: f32| (at(f.bars_x, y, 119.0, 12.0), ZIndex(0));
         let fill = |col: Color| {
             (
                 Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
@@ -621,31 +586,51 @@ fn unit_frame(commands: &mut Commands, ui: &UiAssets, f: UnitFrame) {
         };
         if f.player {
             c.spawn(bar(41.0)).with_children(|b| {
-                b.spawn((fill(Color::srgb(0.0, 0.9, 0.0)), FrameHpFill));
+                b.spawn((fill(Color::srgb(0.0, 1.0, 0.0)), FrameHpFill));
             });
             c.spawn(bar(52.0)).with_children(|b| {
                 b.spawn((fill(Color::srgb(0.0, 0.0, 1.0)), FrameSpFill));
             });
         } else {
             c.spawn(bar(41.0)).with_children(|b| {
-                b.spawn((fill(Color::srgb(0.0, 0.9, 0.0)), TargetFill));
+                b.spawn((fill(Color::srgb(0.0, 1.0, 0.0)), TargetFill));
             });
         }
-        // Çerçeve dokusu.
         c.spawn((at(0.0, 0.0, 232.0, 100.0), f.art.clone(), ZIndex(1), TargetArtIf(!f.player)));
-        // Metinler (çerçevenin üstünde).
         let (name, hp_text, level) = if f.player {
             (HudText::FrameName, HudText::FrameHp, HudText::FrameLevel)
         } else {
             (HudText::TargetName, HudText::TargetHp, HudText::TargetLevel)
         };
-        c.spawn((at(f.bars_x, 22.0, 119.0, 16.0), ZIndex(2), children![(text(ui, "", 12.0, GOLD), TextShadow::default(), name)]));
-        c.spawn((at(f.bars_x, 41.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), TextShadow::default(), hp_text)]));
+        let gold = Color::srgb(1.0, 0.82, 0.0);
+        c.spawn((at(f.bars_x, 22.0, 119.0, 19.0), ZIndex(2), children![(text(ui, "", 11.0, gold), wow_shadow(), name)]));
+        c.spawn((at(f.bars_x, 41.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), wow_shadow(), hp_text, hover, Visibility::Hidden)]));
         if f.player {
-            c.spawn((at(f.bars_x, 52.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), TextShadow::default(), HudText::FrameSp)]));
+            c.spawn((at(f.bars_x, 52.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), wow_shadow(), HudText::FrameSp, hover, Visibility::Hidden)]));
         }
-        c.spawn((at(f.level_x, 58.0, 24.0, 16.0), ZIndex(2), children![(text(ui, "", 11.0, GOLD), TextShadow::default(), level)]));
+        c.spawn((at(f.level_x, 58.0, 24.0, 16.0), ZIndex(2), children![(text(ui, "", 10.0, gold), wow_shadow(), level)]));
     });
+}
+
+/// Hedef adının arkasındaki düşmanlık rengi şerit (TargetFrameNameBackground).
+#[derive(Component)]
+struct TargetNameBg;
+
+/// WoW: çubuk sayıları yalnızca fare çerçevenin üstündeyken.
+fn hover_texts(areas: Query<(&HoverArea, &RelativeCursorPosition)>, mut texts: Query<(&HoverText, &mut Visibility)>) {
+    let over = |h: HoverText| areas.iter().any(|(a, r)| a.0 == h && r.cursor_over());
+    let (p, t, x) = (over(HoverText::Player), over(HoverText::Target), over(HoverText::Exp));
+    for (h, mut v) in &mut texts {
+        let on = match h {
+            HoverText::Player => p,
+            HoverText::Target => t,
+            HoverText::Exp => x,
+        };
+        let want = if on { Visibility::Inherited } else { Visibility::Hidden };
+        if *v != want {
+            *v = want;
+        }
+    }
 }
 
 /// Hedef çerçevesinin dokusu (metin taşında Elite çerçevesi).
@@ -666,7 +651,6 @@ fn update_bars(
     mut exp: Query<&mut Node, (With<ExpFill>, Without<FrameHpFill>, Without<FrameSpFill>)>,
     mut rage: Query<&mut Visibility, (With<RageBuff>, Without<MountBuff>)>,
     mut steed: Query<&mut Visibility, (With<MountBuff>, Without<RageBuff>)>,
-    mut orbs: Query<(&OrbFill, &mut Node), (Without<FrameHpFill>, Without<FrameSpFill>, Without<ExpFill>)>,
 ) {
     let now = time.elapsed_secs();
     let hpf = (stats.hp.max(0) as f32 / d.max_hp.max(1) as f32).clamp(0.0, 1.0);
@@ -681,9 +665,7 @@ fn update_bars(
     if let Ok(mut n) = exp.single_mut() {
         n.width = Val::Percent(ef.clamp(0.0, 1.0) * 100.0);
     }
-    for (o, mut n) in &mut orbs {
-        n.height = Val::Percent(if o.0 { hpf } else { spf } * 100.0);
-    }
+
     let raging = now < stats.rage_until;
     if let Ok(mut v) = rage.single_mut() {
         *v = if raging { Visibility::Inherited } else { Visibility::Hidden };
@@ -693,14 +675,11 @@ fn update_bars(
     }
     for (t, mut s) in &mut texts {
         let v = match t {
-            HudText::HpOrb => format!("{}\n/{}", stats.hp.max(0), d.max_hp),
-            HudText::SpOrb => format!("{}\n/{}", stats.sp.max(0), d.max_sp),
             HudText::FrameName => stats.name.clone(),
             HudText::FrameLevel => stats.level.to_string(),
             HudText::FrameHp => format!("{} / {}", stats.hp.max(0), d.max_hp),
             HudText::FrameSp => format!("{} / {}", stats.sp.max(0), d.max_sp),
             HudText::Exp => format!("EXP %{:.1}", ef * 100.0),
-            HudText::Yang => format!("{} Yang", thousands(inv.yang)),
             // WoW mini harita şeridine sığan kısa ad.
             HudText::Zone => if crate::game::terrain::data().is_some() { "Pyungmoo".to_string() } else { "Elwynn Forest".to_string() },
             HudText::Quest => quest.text(),
@@ -726,7 +705,8 @@ fn update_bars(
 
 fn update_target(
     target: Res<PlayerTarget>,
-    enemies: Query<(&Enemy, &Health)>,
+    enemies: Query<(&Enemy, &Health, Option<&crate::game::mobs::Mob>)>,
+    mut name_bg: Query<&mut ImageNode, (With<TargetNameBg>, Without<TargetArtIf>)>,
     stats: Res<PlayerStats>,
     (mut wa, mut images, mut art): (Option<ResMut<WorldAssets>>, ResMut<Assets<Image>>, Query<(&TargetArtIf, &mut ImageNode)>),
     mut frame: Query<&mut Visibility, With<TargetFrame>>,
@@ -734,16 +714,21 @@ fn update_target(
     mut texts: Query<(&HudText, &mut Text, &mut TextColor)>,
 ) {
     let Ok(mut vis) = frame.single_mut() else { return };
-    let Some((en, hp)) = target.0.and_then(|t| enemies.get(t).ok()) else {
+    let Some((en, hp, mob)) = target.0.and_then(|t| enemies.get(t).ok()) else {
         *vis = Visibility::Hidden;
         return;
     };
     *vis = Visibility::Inherited;
+    // WoW tepki rengi: saldırgan kırmızı, pasif (saldırılınca karşılık veren) sarı.
+    let hostile = en.is_metin || mob.is_some_and(|m| m.def.aggressive || m.aggro);
+    if let Ok(mut bg) = name_bg.single_mut() {
+        bg.color = if hostile { Color::srgb(1.0, 0.0, 0.0) } else { Color::srgb(1.0, 1.0, 0.0) };
+    }
     if let Some(wa) = wa.as_deref_mut() {
         let path = if en.is_metin {
             "Interface\\TargetingFrame\\UI-TargetingFrame-Elite.blp"
         } else {
-            "Interface\\TargetingFrame\\UI-TargetingFrame-NoMana.blp"
+            "Interface\\TargetingFrame\\UI-TargetingFrame.blp"
         };
         if let Some(h) = icon(wa, &mut images, path) {
             for (t, mut img) in &mut art {

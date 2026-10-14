@@ -70,8 +70,13 @@ Metin2 tarzı aksiyon RPG; AzerothSurvivors'ın MPQ verisi (WoW 1.12 assetleri) 
   - **Beceri efektleri** (`fx.rs`): `Spells\*.m2` + benilla-world parçacık/şerit sistemi (Cleave, Whirlwind,
     BattleShout + Bloodlust, ChargeTrail + Stun, LevelUp). Hedef dairesi Selection_SelectionA, ganimet WoW
     modelleri.
-  - **HUD** (`ui/hud.rs`): MainMenuBar atlası (şerit y 212-256 / 148-192, slot x = 8 + 42·i), küreler
-    TempPortraitAlphaMask + MiniMap-TrackingBorder, PlayerFrame/TargetFrame (UI-TargetingFrame, Elite),
+  - **HUD** (`ui/hud.rs`): WoW MainMenuBar birebir (1024×53, 4 şerit y 212/148/84/20, XP çerçevesi y 192/128/64/0
+    ters, slot x = 8 + 42·i, grifonlar ±32). Küre YOK (kullanıcı kaldırttı). PlayerFrame/TargetFrame FrameXML
+    konumlarında (siyah 119×41 arka plan, ad şeridi tepki rengi, sayılar yalnızca fare üstünde); NoMana dokusu
+    1.12 çerçevesiyle hizasız → standart UI-TargetingFrame + Elite. Düşman plakaları WoW Nameplate-Border 128×32.
+    Hareket animasyonu: koşu hızı eşli, yan adımda gövde döner, yerinde dönüşte shuffle, koşarken tam gövde
+    saldırı animasyonu yok. Bevy hata işleyicisi `warn` (silinmiş varlığa komut çökertmez). Test: `AZM_KEYS=e`.
+    Eski:
     mini harita UI-Minimap-Border + ObjectIcons + MinimapArrow. Atlas incelemesi: `examples/blp2png.rs`.
   - **Eşyalar** (`items.rs`): WoW eşya adları Türkçe; setler Kızıl Haçlı/Valor/Might/Wrath/Dreadnaught;
     satıcılar ayrı stok (`shop_ui.rs`, `Windows::shop_kind`).

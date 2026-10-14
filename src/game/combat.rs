@@ -293,7 +293,7 @@ fn attack_input(
     stats: Res<PlayerStats>,
     mut swing: ResMut<Swing>,
     mut target: ResMut<PlayerTarget>,
-    player: Query<&Transform, With<Player>>,
+    player: Query<(&Transform, &Player)>,
     mut body: Query<&mut AnimState, With<Body>>,
     enemies: Query<(Entity, &Transform, &Enemy, &Health), (Without<Player>, Without<Dying>)>,
     mut hits: MessageWriter<Hit>,
@@ -303,9 +303,11 @@ fn attack_input(
 ) {
     let dt = time.delta_secs();
     swing.cd -= dt;
-    let Ok(pxf) = player.single() else {
+    let Ok((pxf, pl)) = player.single() else {
         return;
     };
+    // Koşarken tam gövde saldırı animasyonu oynatılmaz (vuruş yine olur), bacaklar kaymasın.
+    let running = pl.moving;
     // Binekteyken saldırı yok (mount::dismount_on_attack attan indirir).
     if stats.dead || stats.riding {
         swing.hit_at = None;
@@ -383,7 +385,7 @@ fn attack_input(
         swing.cd = derived.swing;
         swing.combo = swing.combo.wrapping_add(1);
         swing.hit_at = Some(time.elapsed_secs() + derived.swing * 0.38);
-        if let Ok(mut st) = body.single_mut() {
+        if let (Ok(mut st), false) = (body.single_mut(), running) {
             let a = if derived.two_hand {
                 anim::ATTACK_2H
             } else {
