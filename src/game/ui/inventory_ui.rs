@@ -14,7 +14,6 @@ use super::{icon, text, thousands, UiAssets, Windows, TEXT};
 use crate::game::inventory::{index, Inventory, COLS, ROWS};
 use crate::game::items::{EquipSlot, Item, Kind};
 use crate::game::log::{GameLog, C_BAD, C_GOOD, C_INFO};
-use crate::game::player::PlayerLook;
 use crate::game::stats::{Derived, PlayerStats};
 
 pub const PITCH: f32 = 34.0;
@@ -119,7 +118,6 @@ pub fn plugin(app: &mut App) {
                     redraw_items,
                     ghost_follow,
                     use_items,
-                    sync_look,
                 )
                     .chain()
                     .run_if(resource_exists::<UiAssets>),
@@ -725,34 +723,5 @@ fn use_items(
                 mount.write(crate::game::mount::MountRequest::UseItem(it.vnum));
             }
         }
-    }
-}
-
-/// Ekipman değişince karakter görünümünü güncelle.
-fn sync_look(inv: Res<Inventory>, mut look: ResMut<PlayerLook>, mut last: Local<Option<[Option<Item>; 8]>>) {
-    if last.as_ref() == Some(&inv.equip) {
-        return;
-    }
-    *last = Some(inv.equip);
-    let mut armor = crate::game::character::ArmorSet::default();
-    let mut weapon = None;
-    let mut two = false;
-    for it in inv.equip.iter().flatten() {
-        match it.def().kind {
-            Kind::Armor { set, .. } => armor = set,
-            Kind::Weapon { display, two_hand, .. } => {
-                weapon = Some(display);
-                two = two_hand;
-            }
-            _ => {}
-        }
-    }
-    let plus = inv.equipped(EquipSlot::Weapon).map(|w| w.plus).unwrap_or(0);
-    if look.armor != armor || look.weapon != weapon || look.two_hand != two || look.weapon_plus != plus {
-        look.armor = armor;
-        look.weapon = weapon;
-        look.two_hand = two;
-        look.weapon_plus = plus;
-        look.dirty = true;
     }
 }
