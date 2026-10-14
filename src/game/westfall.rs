@@ -49,6 +49,9 @@ pub const ZONE: ZoneDef = ZoneDef {
 pub const SUBZONES: &[Subzone] = &[
     ("Alexston Farmstead", -10717.0, 1583.0, 50.0),
     ("Alexston Farmstead", -10617.0, 1583.0, 50.0),
+    // Kuzey sahil şeridi (murloc köyleri): ADT probe'u Longshore; içeride (x -9750) Furlbrow başlar (Q8-2).
+    ("Longshore", -9670.0, 1250.0, 70.0),
+    ("Longshore", -9670.0, 1120.0, 70.0),
     ("Longshore", -11630.0, 1512.0, 130.0),
     ("The Jansen Stead", -9797.0, 993.0, 140.0),
     ("Saldean's Farm", -10193.0, 1130.0, 145.0),
@@ -393,6 +396,10 @@ mod tests {
         assert_eq!(zones::zone_name(MOONBROOK), Some("Moonbrook"));
         assert_eq!(zones::zone_name([-10113.8, 1043.4, 38.0]), Some("Saldean's Farm"));
         assert_eq!(zones::zone_name([-9884.0, 1474.0, 49.0]), Some("Jangolode Mine"));
+        // Kuzey sahil murloc köyleri Longshore; hemen içerisi Furlbrow (Q8-2).
+        assert_eq!(zones::zone_name([-9690.0, 1280.0, 10.0]), Some("Longshore"));
+        assert_eq!(zones::zone_name([-9690.0, 1110.0, 9.0]), Some("Longshore"));
+        assert_eq!(zones::zone_name([-9750.0, 1200.0, 41.0]), Some("Furlbrow's Pumpkin Farm"));
         assert_eq!(zones::zone_name([-11126.0, 856.0, 56.0]), Some("The Dust Plains"));
         // Alt bölge dışı Westfall ovası → bölge adı; Elwynn değişmedi.
         assert_eq!(zones::zone_name([-10440.0, 1220.0, 40.0]), Some("Westfall"));

@@ -217,7 +217,7 @@ fn update_plates(
             pe,
             Kind::Npc,
             // Binekteyken binici daha yüksekte.
-            ppos + Vec3::Y * if stats.riding { 3.2 } else { 2.15 },
+            ppos + Vec3::Y * if stats.riding { 3.6 } else { 2.15 },
             format!("{} Lv.{}
 <Lonca: Kardeşlik>", stats.name, stats.level),
             Color::srgb(0.35, 1.0, 0.35),
