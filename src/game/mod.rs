@@ -6,6 +6,7 @@ pub mod camera;
 pub mod character;
 pub mod combat;
 pub mod devshot;
+#[cfg(test)] mod display_audit;
 pub mod dungeon;
 pub mod elwynn;
 pub mod equipment;

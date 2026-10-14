@@ -169,3 +169,81 @@ oyun içinde doğrulanmalı, H2 tasarım gerektiriyor, H8 `tools/**` altında. B
 | H6 | **DÜZELDİ** | `mobs::Passive` bileşeni eklendi. Galeri mobları hareket etmiyor ve saldırmıyor. | `AZM_MOBGAL=1`, 25. saniyede oyuncu canı 280/280 |
 | H7 | **BELGELENDİ** | Önerilen komut `docs/TAKIM.md`'ye yazıldı. | Yok |
 | H8 | **DÜZELDİ** (Sprint 1 son commit'i) | Yok | Yok |
+
+---
+
+## Q-06 — ItemDisplay denetimi ve bulucu (2026-10-14, dal `test/display-denetim`)
+
+Araç: `src/game/display_audit.rs` (yalnızca `#[cfg(test)]`, iki `#[ignore]` test). Dosya varlığı zincirin karma
+tablosundan (`Chain::contains`) okunur; `tools/mpq_present.txt` ile çapraz kontrol: **0 uyuşmazlık**.
+
+```
+cargo test --release -- --ignored display_audit --nocapture --test-threads=1     # denetim (geçersiz varsa FAIL)
+AZM_FIND=Helm_Plate_RaidWarrior cargo test --release -- --ignored display_find --nocapture
+AZM_FIND=Shield_ AZM_FIND_OK=1 ...      # yalnız dosyaları tam olanlar
+AZM_FIND=4908,2416 ...                  # kimlik listesi
+```
+Kask: `Item\ObjectComponents\Head\<stem>_HuM.m2` (+ `_HuF` uyarısı), omuzluk: `model[0]`=L, `model[1]`=R,
+gövde: `Item\TextureComponents\<Bölge>\<ad>_U.blp` / `_M.blp`; yuvanın kendi katmanlarında çizilebilir doku yoksa
+"karakterde görünmez" hatası.
+
+### Denetim sonucu: 141 benzersiz (tür, kimlik) → **25 hata, 7 kimlik** (test şu an FAIL, beklenen)
+
+| Kimlik | Kullanan | Sorun | Öneri |
+|---|---|---|---|
+| 33729 (silah) | items: Quel'Serrar | `sword_1h_ahnqiraj_d_01button.m2` MPQ'da yok | **33839** (aynı model `sword_1h_ahnqiraj_d_01`, ikon INV_Sword_57) |
+| 5317 (göğüs) | items: Kızıl Haçlı Zırhı | AL `Cloth_A_01Black_Sleeve_AL` yok (ön kol çıplak) | **6147** veya **34915** (Crusader AU+AL+TU+TL tam) |
+| 5319 (kemer) | Kızıl Haçlı | `Plate_A_01Crusader_Belt_LU` yok → görünmez | 3418 (Silver) |
+| 5321 (çizme) | Kızıl Haçlı | Crusader Boot LL/FO yok → görünmez | 25828 (Silver) |
+| 5322 (bileklik) | Kızıl Haçlı | Crusader Bracer AL yok → görünmez | 4448 (Silver) |
+| 5323 (eldiven) | Kızıl Haçlı | Crusader Glove HA yok → görünmez | 25831 (Silver) |
+| 8550–8553 | mob: Defias Haydudu/Yankesicisi/Eşkıyası, Garrick Padfoot | `Leather_A_03DefiasBrown_*` hiçbiri MPQ'da yok → 4 yuva görünmez | Gövde: 3719/4473/4469/9773 (Leather_A_03Brown) ya da Red 9983/8129/8130; Defias maskesi (kask): 8266/13690; omuz 8549 |
+
+Not: Crusader dokularından MPQ'da yalnız Sleeve AU/AL, Chest TU/TL, Pant LU/LL var; Belt/Boot/Bracer/Glove yok.
+Valor/Might/Wrath/Dreadnaught setlerinin 6 yuvası da tam. Dreadnaught 35058 (kemer) ve 35044 (bileklik) satırları
+başka katmanlarda da Plate_A_01Black taşıyor; composite yalnız yuvanın katmanlarını çizdiği için sorun değil (uyarı).
+PlayerLook, tüm NPC setleri ve PROJE_DURUMU'ndaki 8 Metin2 kılıcı (1546, 1550, 1853, 3234, 4443, 4908, 2416, 3758) geçerli.
+
+**Görünmeyen eşyaların asıl nedeni:** `wear(...)` eşyalarının 9'unda (miğfer ×2, kalkan ×2, çizme ×2, bileklik ×3)
+`display = 0` — hiç görünüm kimliği yok; ayrıca kask/kalkan/çizme/bileklik `PlayerLook`'a bağlanmıyor (G-25).
+
+### Öneri: `wear(...)` eşyaları (tümü MPQ'da tam, kasklarda `_HuM` ve `_HuF` var)
+
+| Eşya | Öneri | Model / doku | Alternatif |
+|---|---|---|---|
+| Barbar Demir Miğferi | **1132** | helm_mail_a_02 / Helm_Mail_A_02Silver (INV_Helmet_02) | 29965 helm_plate_d_03 Brown |
+| Aslanyürek Miğferi | **22901** | helm_plate_d_03 / Helm_Plate_D_03WhiteRed (INV_Helmet_13) | 27306 (Silver) |
+| Aşınmış Tahta Kalkan | **18653** | shield_round_b_01 / WoodSteelCap | 2208 buckler_damaged_a_01 Rusty (INV_Shield_09) |
+| Kafatası Alevi Kalkanı | **23825** | shield_horde_c_03 (dikenli koyu) | 32559 shield_zulgurub_d_01, 32558 zulgurub_d_02 (MPQ'da "skull" adlı kalkan yok) |
+| Acemi Çizmeleri | **2229** | LL+FO Mail_A_02 Boot (INV_Boots_01) | 3261 (yalnız FO, kumaş) |
+| Barbar Demir Çizmeleri | **25828** | LL+FO Plate_A_01Silver Boot | 29960 DungeonWarrior Gold (INV_Boots_Plate_03) |
+| Bakır Bileklikler | **3622** | AL Mail_A_02_Bracer (INV_Bracer_07) | 4448 Plate Silver |
+| Kızıl Bilek Koruyucuları | **4448** | AL Plate_A_01Silver_Bracer | (Crusader bileklik dokusu MPQ'da yok) |
+| Cesaret Bileklikleri | **29961** | AL Plate_DungeonWarrior_A_01Gold_Bracer (INV_Bracer_18) | — (Valor setiyle aynı) |
+
+### Öneri: set başına kask + omuzluk
+
+| Set | Kask | Omuzluk |
+|---|---|---|
+| Kızıl Haçlı | **4415** / 6146 helm_plate_a_01crusader | **6141** L/RShoulder_Plate_A_01 + Shoulder_Plate_A_01Crusader; kalkan 4404 / 15818 shield_crest_a_02 Crusader |
+| Valor (T0, Gold) | **31284** helm_plate_dungeonwarrior_a_01 Gold | **29964** L/RShoulder_Plate_DungeonWarrior_A_01 |
+| Might (T1) | **31259** (31260) helm_plate_raidwarrior_a_01 Blue | **31024** L/RShoulder_Plate_RaidWarrior_A_01 Blue |
+| Wrath (T2) | **33741** helm_plate_raidwarrior_b_01 (33981 Black) | **33679** L/RShoulder_Plate_RaidWarrior_B_01 (33988 Black) |
+| Dreadnaught (T3) | **35784** helm_plate_raidwarrior_c_01 (gövde dokusu taşımayan satır) | **35189** L/RShoulder_Plate_RaidWarrior_C_01 |
+
+Kaçınılacak: 33677 (`helm_plate_raidwarrior_b.m2` yok), 12872 (`helm_plate_a_01.m2` yok).
+
+### Öneri: Metin2 ikonik kılıçları (hepsi MPQ'da tam)
+
+| Metin2 | Şimdiki (geçerli) | Alternatifler |
+|---|---|---|
+| Kılıç | 1546 short_a_01 Rusty | 1593 short_a_02 Silver |
+| Uzun Kılıç | 1550 long_a_02 Brown | 2806 long_d_01, 25053 long_d_02 Blue |
+| Hilal Kılıç | 1853 scimitar_a_02 | 1592 sabre_b_02 Orange |
+| Bambu Kılıç | 3234 katana_b_01 Green | 9370 katana_a_01, 16128 katana_b_02 Black |
+| Geniş Kılıç | — | 18156 horde_b_01 Silver, 30994 long_d_03 |
+| Gümüş Kılıç | 4443 sabre_a_01 Silver | 1593 short_a_02 Silver |
+| Zehir Kılıcı | 4908 fire_a_01 + Long_A_02Green | 22378 horde_b_05 Green, 32529 zulgurub_d_02 |
+| Dolunay Kılıcı (2H) | 2416 claymore_b_02 White | 21194 2h_horde_c_03 Blue, 5057 2h_katana_b_01 Blue |
+| Ejderha Kılıcı (2H) | 3758 claymore_b_02 Gold | 23259 2h_horde_d_01, 34112 2h_epic_a_03, 29098 2h_ashbringer_a_01 Blue, 35255/35256 2h_stratholme_d |
+| Diğer 2H (Metin2 hissi) | — | 729 2h_korean_c_01, 9037 2h_korean_a_01, 9121 2h_katana_b_02 Black |
