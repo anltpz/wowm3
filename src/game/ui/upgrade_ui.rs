@@ -1,6 +1,6 @@
 //! Demirci penceresi — artı basma (+0 … +9). Eşyayı yuvaya sürükle (ya da pencere açıkken sağ
-//! tıkla); şans, Yang ve malzeme gösterilir. Başarısızlıkta eşya yok olur — Kutsama Kağıdı ya da
-//! Ejderha Pulu kullanılırsa bir artı düşer. El Kitabı +%10, Ejderha Pulu +%20 şans.
+//! tıkla); şans, Yang ve malzeme gösterilir. Başarısızlıkta eşya yok olur — Koruma Parşömeni ya da
+//! Onyxia Pulu kullanılırsa bir artı düşer. Bileme Taşı +%10, Onyxia Pulu +%20 şans.
 
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -153,9 +153,9 @@ fn build(mut commands: Commands, ui: Res<UiAssets>, skin: Res<Skin>, mut done: L
         });
         // Seçenekler (WoW onay kutuları).
         for (b, label) in [
-            (Btn::Blessing, "Kutsama Kağıdı"),
-            (Btn::Handbook, "Demircinin El Kitabı"),
-            (Btn::Scale, "Ejderha Pulu"),
+            (Btn::Blessing, "Koruma Parşömeni"),
+            (Btn::Handbook, "Yoğun Bileme Taşı"),
+            (Btn::Scale, "Onyxia Pulu"),
         ] {
             w.spawn((
                 Button,
@@ -367,9 +367,9 @@ fn redraw(
     }
     for (l, mut t, mut c) in &mut labels {
         let (name, have, on) = match l.0 {
-            Btn::Blessing => ("Kutsama Kağıdı", inv.count(items::V_BLESSING), st.blessing),
-            Btn::Handbook => ("Demircinin El Kitabı (+%10)", inv.count(items::V_HANDBOOK), st.handbook),
-            Btn::Scale => ("Ejderha Pulu (+%20, koruma)", inv.count(items::V_DRAGON_SCALE), st.scale),
+            Btn::Blessing => ("Koruma Parşömeni", inv.count(items::V_BLESSING), st.blessing),
+            Btn::Handbook => ("Yoğun Bileme Taşı (+%10)", inv.count(items::V_HANDBOOK), st.handbook),
+            Btn::Scale => ("Onyxia Pulu (+%20, koruma)", inv.count(items::V_DRAGON_SCALE), st.scale),
             _ => continue,
         };
         t.0 = format!("{}  ({} adet)", name, have);

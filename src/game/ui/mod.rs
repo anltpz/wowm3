@@ -29,6 +29,20 @@ pub struct Windows {
     pub upgrade: bool,
     pub shop: bool,
     pub help: bool,
+    /// Açık mağazanın türü (hangi satıcı).
+    pub shop_kind: ShopKind,
+}
+
+/// Satıcı türü: her birinin kendi stoku var.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShopKind {
+    /// Tüccar: iksirler, parşömenler.
+    #[default]
+    General,
+    /// Silah Satıcısı.
+    Weapons,
+    /// Zırh Satıcısı.
+    Armor,
 }
 
 impl Windows {
@@ -39,9 +53,10 @@ impl Windows {
         self.shop = false;
     }
     /// Mağaza penceresi (+envanter); Demirci'yi kapatır.
-    pub fn open_shop(&mut self) {
+    pub fn open_shop(&mut self, kind: ShopKind) {
         self.inventory = true;
         self.shop = true;
+        self.shop_kind = kind;
         self.upgrade = false;
     }
 }
@@ -164,7 +179,9 @@ fn env_open(
         match k.as_str() {
             "inv" | "inventory" | "envanter" => w.inventory = true,
             // NPC pencereleri birbirini dışlar: ikisi de verilirse sonuncusu açılır.
-            "shop" | "tuccar" | "satici" => w.open_shop(),
+            "shop" | "tuccar" | "satici" => w.open_shop(ShopKind::General),
+            "silah" | "weapons" => w.open_shop(ShopKind::Weapons),
+            "zirh" | "armor" => w.open_shop(ShopKind::Armor),
             "upgrade" | "demirci" => w.open_upgrade(),
             "help" | "yardim" => w.help = true,
             _ => {}

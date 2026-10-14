@@ -1,8 +1,8 @@
-//! Binek (Seyis): Binicilik Bileti (10 dk) ya da At Madalyonu (Sv25, süresiz) ile Ölümsüz Savaş Atı.
+//! Binek (Seyis): Binicilik Bileti (10 dk) ya da Ölüm Atı Dizginleri (Sv25, süresiz) ile Ölümsüz Savaş Atı.
 //! MPQ'da normal at modeli yok; kullanıcı kararıyla `RidingUndeadWarHorse` kullanılıyor.
 //! - Ctrl+G ya da bilet/madalyona sağ tık: bin / in. Binekteyken hız ×`SPEED_MUL`, saldırı yok
 //!   (saldırı ya da beceri denenince oyuncu attan iner).
-//! - Seyis ile konuşunca: Sv25+ ve madalyon yoksa At Madalyonu, yoksa (bilet ve süre yoksa) bir bilet verir.
+//! - Seyis ile konuşunca: Sv25+ ve madalyon yoksa Ölüm Atı Dizginleri, yoksa (bilet ve süre yoksa) bir bilet verir.
 //! - Durum `PlayerStats.mount_left` / `riding` ile `save.ron`'a yazılır.
 //! - Test: `AZM_RIDE=1` binek üstünde başlatır.
 //! - Görsel: at oyuncunun çocuğu; gövde (`Body`) atın binici takma noktasına (0) taşınır, "Mount" animasyonu.
@@ -22,7 +22,7 @@ use super::stats::PlayerStats;
 
 /// Binek hız çarpanı.
 pub const SPEED_MUL: f32 = 1.6;
-/// At Madalyonu kullanma seviyesi.
+/// Ölüm Atı Dizginleri kullanma seviyesi.
 pub const MEDAL_LEVEL: u32 = 25;
 const STEED_M2: &str = "Creature/MountedDeathKnight/RidingUndeadWarHorse.m2";
 const STEED_SKIN: &str = "Creature/MountedDeathKnight/MountedDeathKnightBlack_01.blp";
@@ -73,7 +73,7 @@ pub fn toggle(stats: &mut PlayerStats, inv: &Inventory) -> Result<&'static str, 
         return Ok("Ölümsüz Savaş Atı'na bindin.");
     }
     if inv.count(items::V_HORSE_MEDAL) > 0 {
-        return Err("At Madalyonu için seviye 25 gerekli.");
+        return Err("Ölüm Atı Dizginleri için seviye 25 gerekli.");
     }
     Err("Binek yok. Seyis'ten Binicilik Bileti al.")
 }

@@ -30,7 +30,7 @@ impl Quest {
     }
     pub fn text(&self) -> String {
         format!(
-            "Görev {}: Metin Taşlarını Yok Et ({}/{})\nÖdül: {} Yang, Kutsama Kağıdı",
+            "Görev {}: Metin Taşlarını Yok Et ({}/{})\nÖdül: {} Yang, Koruma Parşömeni",
             self.stage,
             self.kills,
             self.goal(),

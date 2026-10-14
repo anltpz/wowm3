@@ -1,5 +1,6 @@
-//! Satıcı (Tüccar) penceresi: iksir, kağıt ve başlangıç ekipmanı satar. Satış: eşyayı pencereye sürükle
-//! ya da pencere açıkken envanterde sağ tıkla.
+//! Satıcı pencereleri (WoW eşyaları): Tüccar iksir ve parşömen, Silah Satıcısı silah, Zırh Satıcısı zırh
+//! ve takı satar. Her satıcının kendi penceresi var; `Windows::shop_kind` hangisinin görüneceğini seçer.
+//! Satış: eşyayı pencereye sürükle ya da pencere açıkken envanterde sağ tıkla.
 
 use bevy::prelude::*;
 
@@ -7,31 +8,61 @@ use benilla_assets::WorldAssets;
 
 use super::inventory_ui::SellItem;
 use super::skin::{self, Skin, Style};
-use super::{icon, text, thousands, UiAssets, Windows, TEXT, TEXT_DIM};
+use super::{icon, text, thousands, ShopKind, UiAssets, Windows, TEXT, TEXT_DIM};
 use crate::game::inventory::Inventory;
 use crate::game::items::{self, Item};
 use crate::game::log::{GameLog, C_BAD, C_ITEM};
 
 /// Satılan mallar: (vnum, adet, fiyat).
-pub const GOODS: &[(u32, u16, u32)] = &[
+pub const GENERAL: &[(u32, u16, u32)] = &[
     (items::V_RED_POT_S, 10, 200),
     (items::V_RED_POT_M, 10, 700),
     (items::V_RED_POT_L, 5, 1500),
     (items::V_BLUE_POT_S, 10, 200),
     (items::V_BLESSING, 1, 6000),
     (items::V_HANDBOOK, 1, 15000),
+];
+
+/// Silah Satıcısı: başlangıç ve orta seviye WoW silahları.
+pub const WEAPONS: &[(u32, u16, u32)] = &[
+    (10, 1, 300),
+    (15, 1, 700),
     (20, 1, 1200),
+    (25, 1, 2000),
+    (30, 1, 3500),
+    (35, 1, 5000),
+    (40, 1, 8000),
+    (45, 1, 11000),
+    (50, 1, 15000),
+];
+
+/// Zırh Satıcısı: zırh setleri ve takılar.
+pub const ARMOR: &[(u32, u16, u32)] = &[
+    (11200, 1, 600),
+    (11210, 1, 12000),
     (12200, 1, 400),
     (13000, 1, 450),
     (15000, 1, 300),
-    (16000, 1, 350),
     (14000, 1, 350),
+    (16000, 1, 350),
+    (17000, 1, 350),
+    (12210, 1, 9000),
+    (15010, 1, 11000),
 ];
 
+fn stock(kind: ShopKind) -> &'static [(u32, u16, u32)] {
+    match kind {
+        ShopKind::General => GENERAL,
+        ShopKind::Weapons => WEAPONS,
+        ShopKind::Armor => ARMOR,
+    }
+}
+
+/// Satıcı penceresi (türüne göre).
 #[derive(Component)]
-pub struct ShopWindow;
+pub struct ShopWindow(ShopKind);
 #[derive(Component)]
-struct BuyButton(usize);
+struct BuyButton(ShopKind, usize);
 #[derive(Component)]
 struct CloseShop;
 
@@ -57,6 +88,11 @@ fn build(
         return;
     }
     *done = true;
+    for (kind, title) in [
+        (ShopKind::General, "Tüccar — İksir ve Parşömen"),
+        (ShopKind::Weapons, "Silah Satıcısı"),
+        (ShopKind::Armor, "Zırh Satıcısı"),
+    ] {
     skin::spawn_window(
         &mut commands,
         &skin,
@@ -73,12 +109,12 @@ fn build(
             row_gap: px(3),
             ..default()
         },
-        "Satıcı — Genel Mağaza",
+        title,
         CloseShop,
     )
-    .insert((Visibility::Hidden, ShopWindow))
+    .insert((Visibility::Hidden, ShopWindow(kind)))
     .with_children(|w| {
-        for (i, (v, n, price)) in GOODS.iter().enumerate() {
+        for (i, (v, n, price)) in stock(kind).iter().enumerate() {
             let it = Item::stack(*v, *n);
             let img = icon(&mut wa, &mut images, &it.icon_path()).unwrap_or_default();
             // WoW satıcı satırı: altın kenarlı ikon yuvası + ad etiketi + fiyat (sikke) + Satın Al.
@@ -118,18 +154,19 @@ fn build(
                     l.spawn((text(&ui, thousands(*price as u64), 12.0, TEXT), skin::shadow()));
                     l.spawn(skin::coin(&skin));
                 });
-                r.spawn((skin::panel_button(&skin, &ui, "Satın Al", 72.0, 22.0, ()), BuyButton(i)));
+                r.spawn((skin::panel_button(&skin, &ui, "Satın Al", 72.0, 22.0, ()), BuyButton(kind, i)));
             });
         }
         w.spawn(Node { height: px(4), ..default() });
         w.spawn(text(&ui, "Satmak için: eşyayı buraya sürükle ya da sağ tıkla", 11.0, TEXT_DIM));
         w.spawn((skin::panel_button(&skin, &ui, "Kapat", 96.0, 22.0, ()), CloseShop));
     });
+    }
 }
 
-fn show_hide(w: Res<Windows>, mut q: Query<&mut Visibility, With<ShopWindow>>) {
-    if let Ok(mut v) = q.single_mut() {
-        let want = if w.shop { Visibility::Inherited } else { Visibility::Hidden };
+fn show_hide(w: Res<Windows>, mut q: Query<(&ShopWindow, &mut Visibility)>) {
+    for (sw, mut v) in &mut q {
+        let want = if w.shop && w.shop_kind == sw.0 { Visibility::Inherited } else { Visibility::Hidden };
         if *v != want {
             *v = want;
         }
@@ -153,7 +190,7 @@ fn buy(
             continue;
         }
         let Some(b) = b else { continue };
-        let (v, n, price) = GOODS[b.0];
+        let (v, n, price) = stock(b.0)[b.1];
         if inv.yang < price as u64 {
             log.push(now, C_BAD, "Yeterli Yang yok.");
             continue;

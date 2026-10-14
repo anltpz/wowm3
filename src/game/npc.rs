@@ -553,7 +553,9 @@ fn attach_tools(
 fn open(w: &mut Windows, kind: NpcKind) {
     match kind {
         NpcKind::Blacksmith => w.open_upgrade(),
-        k if k.is_shop() => w.open_shop(),
+        NpcKind::WeaponMerchant => w.open_shop(super::ui::ShopKind::Weapons),
+        NpcKind::ArmorMerchant => w.open_shop(super::ui::ShopKind::Armor),
+        k if k.is_shop() => w.open_shop(super::ui::ShopKind::General),
         _ => {}
     }
 }
