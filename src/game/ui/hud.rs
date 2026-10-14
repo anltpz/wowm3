@@ -123,6 +123,12 @@ pub struct SkillSlotNode(pub usize);
 struct SkillShade(usize);
 #[derive(Component)]
 struct SkillCdText(usize);
+/// Eylem çubuğundaki binek slotu.
+#[derive(Component)]
+struct MountSlot;
+/// Binekteyken binek slotunun parıltısı.
+#[derive(Component)]
+struct MountActive;
 #[derive(Component, Clone, Copy)]
 enum MenuBtn {
     Inventory,
@@ -141,6 +147,7 @@ pub fn plugin(app: &mut App) {
                 update_log,
                 update_quick,
                 update_skills,
+                mount_slot,
                 use_quick,
                 menu_buttons,
                 radar,
@@ -206,6 +213,7 @@ fn build(
     let book = ic("Interface\\Icons\\INV_Misc_Book_09.blp");
     let rage = ic("Interface\\Icons\\Ability_Racial_BloodRage.blp");
     let steed = ic("Interface\\Icons\\Ability_Mount_Undeadhorse.blp");
+    let mount_on = ic("Interface\\Buttons\\CheckButtonHilight.blp");
     let atlas = |y0: f32, y1: f32| ImageNode { image: bar.clone(), rect: Some(Rect::new(0.0, y0, 256.0, y1)), ..default() };
     let abs = |left: f32, bottom: f32, w: f32, h: f32| Node {
         position_type: PositionType::Absolute,
@@ -303,6 +311,22 @@ fn build(
                     ));
                 });
             }
+            // Slot 8: binek (Ölüm Atı); tıkla ya da Ctrl+G. Binekteyken WoW "etkin" parıltısı.
+            bar_root.spawn((slot_node(slot_x(8)), MountSlot)).with_children(|s| {
+                // Parıltı (WoW'da toplamalı çizilir, içi siyah): ikonun arkasında, yalnızca altın kenarı görünür.
+                s.spawn((
+                    Node { position_type: PositionType::Absolute, left: px(-5), top: px(-5), width: px(SLOT + 10.0), height: px(SLOT + 10.0), ..default() },
+                    ImageNode::new(mount_on.clone()),
+                    Visibility::Hidden,
+                    MountActive,
+                ));
+                s.spawn((Node { width: px(SLOT), height: px(SLOT), ..default() }, ImageNode::new(steed.clone())));
+                s.spawn((
+                    Node { position_type: PositionType::Absolute, right: px(2), top: px(1), ..default() },
+                    text(&ui, "G", 10.0, Color::srgb(0.6, 0.6, 0.6)),
+                    wow_shadow(),
+                ));
+            });
             // Yardım: ilk mikro düğme yerinde (x 552); çanta: sırt çantası yerinde (sağdan 6, 37×37).
             bar_root.spawn((
                 Node { position_type: PositionType::Absolute, left: px(552), bottom: px(4), width: px(SLOT), height: px(SLOT), ..default() },
@@ -854,6 +878,25 @@ fn update_quick(
             }
             None => String::new(),
         };
+    }
+}
+
+/// Binek slotu: sol tık bin / in; binekteyken parlar.
+fn mount_slot(
+    buttons: Res<ButtonInput<MouseButton>>,
+    stats: Res<PlayerStats>,
+    slot: Query<&RelativeCursorPosition, With<MountSlot>>,
+    mut glow: Query<&mut Visibility, With<MountActive>>,
+    mut req: MessageWriter<crate::game::mount::MountRequest>,
+) {
+    if buttons.just_pressed(MouseButton::Left) && slot.iter().any(|r| r.cursor_over()) {
+        req.write(crate::game::mount::MountRequest::Toggle);
+    }
+    if let Ok(mut v) = glow.single_mut() {
+        let want = if stats.riding { Visibility::Inherited } else { Visibility::Hidden };
+        if *v != want {
+            *v = want;
+        }
     }
 }
 

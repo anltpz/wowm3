@@ -333,7 +333,7 @@ pub const ITEMS: &[ItemDef] = &[
         name: "Ölüm Atı Dizginleri", // Deathcharger's Reins
         icon: "Ability_Mount_Undeadhorse",
         kind: Kind::MountMedal,
-        level: 25,
+        level: 1,
         height: 1,
         stack: 1,
         price: 0,
