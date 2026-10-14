@@ -409,6 +409,11 @@ pub fn open_ground(
     ref_y: f32,
     max_dy: f32,
 ) -> Option<Vec3> {
+    // Zindan (iç mekân): arazi yok, yalnızca WMO zemini (noktanın hemen üstünden aşağı ışın; tavan değil).
+    if super::physics::indoor() {
+        let g = super::physics::ground_at(col, p)?;
+        return ((g - ref_y).abs() <= max_dy).then(|| Vec3::new(p.x, g, p.z));
+    }
     if let Some(d) = super::terrain::data() {
         let _ = (ref_y, max_dy);
         let m = d.to_map(p);

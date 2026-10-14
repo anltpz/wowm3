@@ -394,8 +394,10 @@ fn metin_waves(
                 let k = pool[rng.random_range(0..pool.len())];
                 let ang = rng.random_range(0.0..std::f32::consts::TAU);
                 let off = Vec3::new(ang.cos() * 4.5, 0.0, ang.sin() * 4.5);
-                let at = open_ground(&col, &wp, xf.translation + off, xf.translation.y, 4.0)
-                    .unwrap_or(xf.translation + off);
+                // Zindanda zemini olmayan nokta (duvar arkası, boşluk) yerine taşın dibi.
+                let at = open_ground(&col, &wp, xf.translation + off, xf.translation.y, 4.0).unwrap_or_else(|| {
+                    if super::physics::indoor() { xf.translation + Vec3::Y * 0.3 } else { xf.translation + off }
+                });
                 spawn_mob(&mut commands, &server, wa, &mut images, db.as_deref(), mob(k), at, None, true);
             }
             log.push(

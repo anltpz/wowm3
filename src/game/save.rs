@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use super::inventory::{Cell, Inventory, CELLS};
 use super::log::{GameLog, C_GOOD};
 use super::player::Player;
+use super::dungeon::{DungeonCooldowns, DungeonRun};
 use super::quest::Quest;
 use super::stats::PlayerStats;
 
@@ -41,6 +42,9 @@ pub struct SaveData {
     /// Oyuncunun WoW dünya konumu (Elwynn / orijinal harita).
     #[serde(default)]
     pub pos_wow: Option<[f32; 3]>,
+    /// Zindan bekleme süreleri: (zindan kimliği, hazır olacağı unix saniye). Gerçek zamanla işler.
+    #[serde(default)]
+    pub dungeon_cd: Vec<(u32, u64)>,
 }
 
 impl SaveData {
@@ -56,6 +60,7 @@ impl SaveData {
             quest: quest.clone(),
             pos_map,
             pos_wow: None,
+            dungeon_cd: Vec::new(),
         }
     }
 
@@ -272,27 +277,42 @@ fn load_into_world(mut commands: Commands) {
             inv.touch();
             commands.insert_resource(inv);
             commands.insert_resource(d.quest.clone());
+            commands.insert_resource(DungeonCooldowns(d.dungeon_cd.clone()));
         }
         None => info!("save: yeni oyun ({path})"),
     }
 }
 
-/// Oyuncunun konumu: (Pyungmoo harita metresi, WoW dünya koordinatı) — hangi harita açıksa.
-fn player_pos(player: &Query<&Transform, With<Player>>) -> (Option<[f32; 2]>, Option<[f32; 3]>) {
-    let Ok(xf) = player.single() else { return (None, None) };
+/// Kaydedilecek konum: (Pyungmoo harita metresi, WoW dünya koordinatı) — hangi harita açıksa. Zindandaysa
+/// (`dungeon_return`) oyuncunun instance konumu değil, zindana girdiği nokta yazılır.
+fn save_pos(at: Vec3, dungeon_return: Option<[f32; 3]>) -> (Option<[f32; 2]>, Option<[f32; 3]>) {
+    let at = dungeon_return.map_or(at, benilla_assets::coords::wow_to_bevy);
     match super::terrain::data() {
         Some(d) => {
-            let m = d.to_map(xf.translation);
+            let m = d.to_map(at);
             (Some([m.x, m.y]), None)
         }
-        None => (None, Some(benilla_assets::coords::bevy_to_wow(xf.translation))),
+        None => (None, Some(benilla_assets::coords::bevy_to_wow(at))),
     }
 }
 
-fn write_now(stats: &PlayerStats, inv: &Inventory, quest: &Quest, pos: (Option<[f32; 2]>, Option<[f32; 3]>)) -> bool {
+/// Oyuncunun konumu (bkz. `save_pos`).
+fn player_pos(player: &Query<&Transform, With<Player>>, run: Option<&DungeonRun>) -> (Option<[f32; 2]>, Option<[f32; 3]>) {
+    let Ok(xf) = player.single() else { return (None, None) };
+    save_pos(xf.translation, run.and_then(|r| r.return_wow()))
+}
+
+fn write_now(
+    stats: &PlayerStats,
+    inv: &Inventory,
+    quest: &Quest,
+    pos: (Option<[f32; 2]>, Option<[f32; 3]>),
+    cds: Option<&DungeonCooldowns>,
+) -> bool {
     let Some(path) = save_path() else { return false };
     let mut data = SaveData::snapshot(stats, inv, quest, pos.0);
     data.pos_wow = pos.1;
+    data.dungeon_cd = cds.map(|c| c.pruned(super::dungeon::unix_now())).unwrap_or_default();
     let res = data.to_ron().map_err(|e| e.to_string()).and_then(|t| write_atomic(path, &t).map_err(|e| e.to_string()));
     match res {
         Ok(()) => {
@@ -313,19 +333,20 @@ fn autosave(
     (stats, inv, quest): (Res<PlayerStats>, Res<Inventory>, Res<Quest>),
     player: Query<&Transform, With<Player>>,
     mut log: ResMut<GameLog>,
+    (run, cds): (Option<Res<DungeonRun>>, Option<Res<DungeonCooldowns>>),
 ) {
     st.since += time.delta_secs();
     let level_up = st.last_level.is_some_and(|l| stats.level > l);
     st.last_level = Some(stats.level);
     let f5 = keys.just_pressed(KeyCode::F5);
     // Oyuncu henüz doğmadıysa (ilk kareler) konum yok: otomatik kaydı ertele.
-    let pos = player_pos(&player);
+    let pos = player_pos(&player, run.as_deref());
     if player.single().is_err() && !f5 {
         return;
     }
     if f5 || level_up || st.since >= AUTOSAVE_SECS {
         st.since = 0.0;
-        let ok = write_now(&stats, &inv, &quest, pos);
+        let ok = write_now(&stats, &inv, &quest, pos, cds.as_deref());
         if f5 {
             if ok {
                 log.push(time.elapsed_secs(), C_GOOD, "Oyun kaydedildi.");
@@ -342,13 +363,14 @@ fn save_on_exit(
     (stats, inv, quest): (Res<PlayerStats>, Res<Inventory>, Res<Quest>),
     player: Query<&Transform, With<Player>>,
     mut done: Local<bool>,
+    (run, cds): (Option<Res<DungeonRun>>, Option<Res<DungeonCooldowns>>),
 ) {
     let any = exit.read().count() + close.read().count() > 0;
     if !any || *done {
         return;
     }
     *done = true;
-    write_now(&stats, &inv, &quest, player_pos(&player));
+    write_now(&stats, &inv, &quest, player_pos(&player, run.as_deref()), cds.as_deref());
 }
 
 #[cfg(test)]
@@ -405,6 +427,39 @@ mod tests {
         assert_eq!(d.pos_map, None);
         // Tamamen boş yapı da yüklenir.
         assert!(SaveData::parse("()").is_ok());
+    }
+
+    /// Zindan bekleme süreleri kayda yazılır; eski (Sprint 4) kayıt `dungeon_cd` olmadan açılır.
+    #[test]
+    fn dungeon_cooldowns_roundtrip_and_old_saves() {
+        let mut a = sample();
+        a.dungeon_cd = vec![(1, 1_800_000_000), (2, 1_800_003_600)];
+        let b = SaveData::parse(&a.to_ron().unwrap()).unwrap();
+        assert_eq!(b.dungeon_cd, a.dungeon_cd);
+        // Sprint 4 kaydı: alan yok.
+        let old = "(version: 1, stats: (level: 9), pos_wow: Some((-9460.0, 60.0, 57.0)))";
+        let d = SaveData::parse(old).unwrap();
+        assert!(d.dungeon_cd.is_empty());
+        assert_eq!(d.pos_wow, Some([-9460.0, 60.0, 57.0]));
+        // Bekleme süresi kaydedilip geri okunduğunda gerçek saate göre kalanı verir.
+        let cds = DungeonCooldowns(b.dungeon_cd.clone());
+        assert_eq!(cds.remaining(1, 1_800_000_000 - 100, 1800), 100);
+    }
+
+    /// Zindanda alınan kayıt instance konumunu değil giriş (dönüş) noktasını yazar.
+    #[test]
+    fn dungeon_save_writes_return_position() {
+        let inside = benilla_assets::coords::wow_to_bevy([-3000.0, 15500.0, 5.0]);
+        let ret = [-9430.0, 55.0, 57.5];
+        let (map, wow) = save_pos(inside, Some(ret));
+        assert_eq!(map, None);
+        let wow = wow.unwrap();
+        for i in 0..3 {
+            assert!((wow[i] - ret[i]).abs() < 1e-3, "{wow:?}");
+        }
+        // Zindan dışında oyuncunun kendi konumu.
+        let (_, out) = save_pos(inside, None);
+        assert!((out.unwrap()[1] - 15500.0).abs() < 1e-3);
     }
 
     #[test]
