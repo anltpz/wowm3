@@ -22,17 +22,18 @@ use super::stats::PlayerStats;
 
 /// Binek hız çarpanı.
 pub const SPEED_MUL: f32 = 1.6;
-/// Ölüm Atı Dizginleri kullanma seviyesi.
-pub const MEDAL_LEVEL: u32 = 25;
+/// Ölüm Atı Dizginleri kullanma seviyesi: kullanıcı isteğiyle ilk seviyeden (karakter yavaş kalmasın).
+pub const MEDAL_LEVEL: u32 = 1;
 const STEED_M2: &str = "Creature/MountedDeathKnight/RidingUndeadWarHorse.m2";
 const STEED_SKIN: &str = "Creature/MountedDeathKnight/MountedDeathKnightBlack_01.blp";
 /// Binek modelinde binicinin takma noktası.
 const RIDER_ATTACH: u16 = 0;
 
-/// Bin / in isteği (envanter sağ tık).
+/// Bin / in isteği: envanterde bilete/dizginlere sağ tık ya da eylem çubuğundaki binek slotu.
 #[derive(Message, Clone, Copy, Debug)]
 pub enum MountRequest {
     UseItem(u32),
+    Toggle,
 }
 
 /// Oyuncunun bindiği at (oyuncunun çocuğu).
@@ -42,8 +43,30 @@ pub struct Steed;
 pub fn plugin(app: &mut App) {
     app.add_message::<MountRequest>().add_systems(Startup, env_ride).add_systems(
         Update,
-        (requests, stable_gift, tick, dismount_on_attack, sync_steed, seat_rider, animate_steed).chain(),
+        (grant_reins, requests, stable_gift, tick, dismount_on_attack, sync_steed, seat_rider, animate_steed).chain(),
     );
+}
+
+/// Her karakterin çantasında Ölüm Atı Dizginleri olsun (yeni oyun ve eski kayıt): ilk seviyeden binek.
+fn grant_reins(
+    time: Res<Time>,
+    player: Query<(), With<Player>>,
+    mut inv: ResMut<Inventory>,
+    mut log: ResMut<GameLog>,
+    mut done: Local<bool>,
+) {
+    // Oyuncu doğup başlangıç eşyaları verildikten sonra (bir kez).
+    if *done || player.is_empty() || time.elapsed_secs() < 1.0 {
+        return;
+    }
+    *done = true;
+    if inv.count(items::V_HORSE_MEDAL) == 0 {
+        if inv.add(Item::new(items::V_HORSE_MEDAL)).is_none() {
+            log.push(time.elapsed_secs(), C_ITEM, "Ölüm Atı Dizginleri çantana eklendi. Ctrl+G ile bin.");
+        } else {
+            log.push(time.elapsed_secs(), C_BAD, "Çanta dolu: Ölüm Atı Dizginleri için Erma'ya git.");
+        }
+    }
 }
 
 /// Test: `AZM_RIDE=1` ile binek üstünde (10 dk) başla.
@@ -124,7 +147,13 @@ fn requests(
 ) {
     let now = time.elapsed_secs();
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-    let mut wants: Vec<Option<u32>> = ev.read().map(|MountRequest::UseItem(v)| Some(*v)).collect();
+    let mut wants: Vec<Option<u32>> = ev
+        .read()
+        .map(|r| match r {
+            MountRequest::UseItem(v) => Some(*v),
+            MountRequest::Toggle => None,
+        })
+        .collect();
     if ctrl && keys.just_pressed(KeyCode::KeyG) {
         wants.push(None);
     }
@@ -331,11 +360,9 @@ mod tests {
     }
 
     #[test]
-    fn medal_needs_level_and_is_timeless() {
-        let (mut s, mut inv) = rich(20);
+    fn reins_work_from_level_one_and_are_timeless() {
+        let (mut s, mut inv) = rich(1);
         inv.add(Item::new(items::V_HORSE_MEDAL));
-        assert!(toggle(&mut s, &inv).is_err());
-        s.level = 25;
         toggle(&mut s, &inv).unwrap();
         assert!(s.riding);
         assert!(!tick_time(&mut s, true, 10_000.0));

@@ -6,6 +6,7 @@ pub mod camera;
 pub mod character;
 pub mod combat;
 pub mod devshot;
+pub mod elwynn;
 pub mod fx;
 pub mod gallery;
 pub mod inventory;
@@ -26,8 +27,8 @@ pub mod stats;
 pub mod terrain;
 pub mod ui;
 
-/// Oyunun başladığı nokta (WoW dünya koordinatı): Northshire Abbey önü.
-pub const START_WOW_DEFAULT: [f32; 3] = [-8935.0, -140.0, 82.0];
+/// Oyunun başladığı nokta (WoW dünya koordinatı): WoW'daki insan başlangıcı, Northshire Manastırı önü.
+pub const START_WOW_DEFAULT: [f32; 3] = elwynn::HUMAN_START;
 
 /// Başlangıç noktası (WoW koordinatı). Öncelik: `AZM_FOCUS=x,y,z` > `AZM_MAPSTART=x,y` > kayıttaki konum
 /// (`save.ron`, su/bina içindeyse yok sayılır) > köy meydanı.
@@ -53,6 +54,13 @@ pub fn start_wow() -> [f32; 3] {
                 let (x, y) = v.split_once(',')?;
                 let d = terrain::data()?;
                 Some(benilla_assets::coords::bevy_to_wow(d.to_world(x.trim().parse().ok()?, y.trim().parse().ok()?)))
+            })
+            .or_else(|| {
+                // Elwynn: kayıttaki WoW konumu.
+                if terrain::data().is_some() {
+                    return None;
+                }
+                save::saved_wow()
             })
             .or_else(|| {
                 let [x, y] = save::saved_pos()?;

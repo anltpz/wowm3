@@ -80,6 +80,14 @@ Metin2 tarzı aksiyon RPG; AzerothSurvivors'ın MPQ verisi (WoW 1.12 assetleri) 
     mini harita UI-Minimap-Border + ObjectIcons + MinimapArrow. Atlas incelemesi: `examples/blp2png.rs`.
   - **Eşyalar** (`items.rs`): WoW eşya adları Türkçe; setler Kızıl Haçlı/Valor/Might/Wrath/Dreadnaught;
     satıcılar ayrı stok (`shop_ui.rs`, `Windows::shop_kind`).
+- [x] Sprint 4 (kullanıcı: "harita orijinal WoW'a sadık kalsın"): **varsayılan harita Elwynn Forest** (gerçek ADT/WMO,
+  benilla akışı); Pyungmoo yalnızca `AZM_PYUNGMOO=1`. `elwynn.rs`: alt bölge merkezleri ADT MCNK areaId'den, bina
+  konumları MODF'tan ölçüldü; WoW yaratıkları (Genç Kurt, kobold'lar, Defias, domuz/kurt/örümcek, murloc, Riverpaw,
+  patronlar Garrick Padfoot/Princess/Mother Fang/Hogger) WoW'daki yerlerinde; metin taşları Elwynn alanlarında ve
+  dalgalarında bölgenin yaratıkları. WoW NPC'leri (`npc::ELWYNN_NPCS`, WoW x/y/z): McBride, Willem, Danil, Godric,
+  Janos, Llane (Northshire); Dughan, Farley, Brog, Argus (Demirci), Corina, Andrew, Erma (binek) (Goldshire).
+  Başlangıç/yeniden doğma WoW insan başlangıcı (-8949.95, -132.49, 83.53); kayıt `pos_wow`. Mini harita alt bölge adı.
+  Kısıt: Elwynn Sv 1-11; üstü için metin taşları (Sv 5-25) — sonraki bölgeler Westfall/Redridge/Duskwood.
 - [ ] Sonraki: kayıt/yükleme (save.ron), +7…+9 silah parıltısı (enchant M2 / emissive), gerçek minimap
   dokuları, ses efektleri, beceri seviyeleri, parti/lonca görselleri (tasarım görselindeki sol liste).
 
