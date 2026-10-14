@@ -75,6 +75,34 @@ pub fn auto_plugin(app: &mut App) {
     if std::env::var("AZM_AUTO").is_ok() {
         app.add_systems(Update, autopilot);
     }
+    if test_level().is_some() {
+        app.add_systems(Update, level_hook);
+    }
+}
+
+/// `AZM_LEVEL=<n>` (1-40): test karakteri bu seviyede başlar (zindan/bölge testleri). Otopilot da bu seviyeyi korur.
+fn test_level() -> Option<u32> {
+    std::env::var("AZM_LEVEL").ok().and_then(|v| v.trim().parse::<u32>().ok()).map(|l| l.clamp(1, 40))
+}
+
+/// `AZM_LEVEL`: ilk karelerde seviyeyi yazar ve canı/SP'yi doldurur (bir kez).
+fn level_hook(
+    mut done: Local<bool>,
+    mut stats: ResMut<super::stats::PlayerStats>,
+    inv: Res<super::inventory::Inventory>,
+    player: Query<(), With<super::player::Player>>,
+) {
+    if *done || player.single().is_err() {
+        return;
+    }
+    let Some(l) = test_level() else { return };
+    *done = true;
+    stats.level = l;
+    stats.exp = 0;
+    let d = super::stats::derive(&stats, &inv);
+    stats.hp = d.max_hp;
+    stats.sp = d.max_sp;
+    info!("devshot: AZM_LEVEL={l} (can {})", d.max_hp);
 }
 
 fn autopilot(
@@ -94,8 +122,9 @@ fn autopilot(
     }
     *acc = 0.0;
     // Testte becerilerin hepsi açık olsun.
-    if stats.level < 6 {
-        stats.level = 6;
+    let min = test_level().unwrap_or(6).max(6);
+    if stats.level < min {
+        stats.level = min;
     }
     let Ok(p) = player.single() else { return };
     if target.0.is_none() {
