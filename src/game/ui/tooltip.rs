@@ -5,7 +5,8 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 use super::inventory_ui::{Drag, Hovered, Spot};
-use super::{UiAssets, PANEL_BORDER, TEXT, TEXT_DIM};
+use super::skin::{self, Skin, Style};
+use super::{UiAssets, TEXT, TEXT_DIM};
 
 const GOLD_TIP: Color = Color::srgb(1.0, 0.82, 0.35);
 use crate::game::inventory::Inventory;
@@ -15,35 +16,50 @@ use crate::game::stats::PlayerStats;
 
 #[derive(Component)]
 struct Tip;
+/// Satırların eklendiği iç düğüm (çerçeve katmanları silinmesin diye ayrı).
+#[derive(Component)]
+struct TipBody;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
-            spawn.run_if(resource_added::<UiAssets>),
+            spawn.run_if(resource_exists::<UiAssets>.and(resource_exists::<Skin>)),
             update.run_if(resource_exists::<UiAssets>),
         ),
     );
 }
 
-fn spawn(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(px(8)),
-            row_gap: px(2),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(3)),
-            max_width: px(280),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.02, 0.02, 0.03, 0.95)),
-        BorderColor::all(PANEL_BORDER),
-        GlobalZIndex(90),
-        Visibility::Hidden,
-        Tip,
-    ));
+fn spawn(mut commands: Commands, skin: Res<Skin>, mut done: Local<bool>) {
+    if *done {
+        return;
+    }
+    *done = true;
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                padding: UiRect::axes(px(11), px(10)),
+                max_width: px(290),
+                ..default()
+            },
+            GlobalZIndex(90),
+            Visibility::Hidden,
+            Pickable::IGNORE,
+            Tip,
+        ))
+        .with_children(|p| {
+            skin::frame_layers(p, &skin, Style::Tooltip);
+            p.spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                    ..default()
+                },
+                Pickable::IGNORE,
+                TipBody,
+            ));
+        });
 }
 
 /// Bilgi kutusu satırları.
@@ -132,12 +148,14 @@ fn update(
     up: Res<super::upgrade_ui::UpgradeState>,
     stats: Res<PlayerStats>,
     window: Query<&Window, With<PrimaryWindow>>,
-    mut tip: Query<(Entity, &mut Node, &mut Visibility), With<Tip>>,
+    mut tip: Query<(&mut Node, &mut Visibility), With<Tip>>,
+    body: Query<Entity, With<TipBody>>,
     mut last: Local<Option<(Spot, Item)>>,
     skill_slots: Query<(&super::hud::SkillSlotNode, &bevy::ui::RelativeCursorPosition)>,
     mut last_skill: Local<Option<usize>>,
 ) {
-    let Ok((e, mut n, mut vis)) = tip.single_mut() else { return };
+    let Ok((mut n, mut vis)) = tip.single_mut() else { return };
+    let Ok(e) = body.single() else { return };
     // Beceri slotu bilgisi.
     if let Some(i) = skill_slots.iter().find(|(_, r)| r.cursor_over()).map(|(s, _)| s.0) {
         let sk = &crate::game::skills::SKILLS[i];
@@ -201,6 +219,10 @@ fn update(
         let x = if c.x + 300.0 > w { c.x - 290.0 } else { c.x + 18.0 };
         n.left = px(x);
         n.top = px(c.y + 12.0);
+    } else if let Ok(w) = window.single() {
+        // İmleç pencerede yok (AZM_HOVER testi): envanterin soluna koy.
+        n.left = px(w.width() - 500.0);
+        n.top = px(330.0);
     }
     *vis = Visibility::Inherited;
 }

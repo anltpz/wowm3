@@ -9,7 +9,8 @@ use bevy::window::PrimaryWindow;
 use benilla_assets::WorldAssets;
 
 use super::hud::{QuickSlotNode, QuickSlots};
-use super::{icon, panel, text, thousands, UiAssets, Windows, GOLD, SLOT_BG, SLOT_BORDER, SLOT_HOVER, TEXT, TEXT_DIM, TITLE_BG};
+use super::skin::{self, Skin, Style};
+use super::{icon, text, thousands, UiAssets, Windows, TEXT};
 use crate::game::inventory::{index, Inventory, COLS, ROWS};
 use crate::game::items::{EquipSlot, Item, Kind};
 use crate::game::log::{GameLog, C_BAD, C_GOOD, C_INFO};
@@ -74,7 +75,16 @@ struct YangText;
 #[derive(Component)]
 struct Ghost;
 #[derive(Component)]
+#[allow(dead_code)]
 struct CellBg(usize);
+#[derive(Component)]
+struct InvClose;
+#[derive(Component)]
+struct GridHi;
+#[derive(Component)]
+struct EquipHi(EquipSlot);
+#[derive(Component)]
+struct EquipSil(EquipSlot);
 
 /// Pencere sağ üstte; bu düzen sabitleri tooltip/ghost hizası için de kullanılır.
 const EQUIP_LAYOUT: [(EquipSlot, f32, f32, f32); 8] = [
@@ -99,11 +109,13 @@ pub fn plugin(app: &mut App) {
         .add_systems(
             Update,
             (
-                build.run_if(resource_added::<UiAssets>),
+                build.run_if(resource_exists::<UiAssets>.and(resource_exists::<Skin>)),
                 (
                     show_hide,
                     page_tabs,
                     hover_and_mouse,
+                    env_hover,
+                    hover_visuals,
                     redraw_items,
                     ghost_follow,
                     use_items,
@@ -131,167 +143,164 @@ fn starter_kit(mut inv: ResMut<Inventory>) {
     inv.touch();
 }
 
-fn build(mut commands: Commands, ui: Res<UiAssets>) {
+fn build(mut commands: Commands, ui: Res<UiAssets>, skin: Res<Skin>, mut done: Local<bool>) {
+    if *done {
+        return;
+    }
+    *done = true;
     let grid_w = COLS as f32 * PITCH - 2.0;
     let grid_h = ROWS as f32 * PITCH - 2.0;
-    commands
-        .spawn((
-            panel(Node {
-                position_type: PositionType::Absolute,
-                right: px(10),
-                top: px(262),
-                width: px(grid_w + 20.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                padding: UiRect::bottom(px(8)),
-                row_gap: px(6),
-                ..default()
-            }),
-            Visibility::Hidden,
-            InvWindow,
-        ))
-        .with_children(|w| {
-            // Başlık
-            w.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    height: px(24),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(TITLE_BG),
-            ))
-            .with_child(text(&ui, "Envanter", 15.0, GOLD));
-            // Ekipman alanı
-            w.spawn((
-                Node {
-                    width: px(grid_w),
-                    height: px(156),
-                    border: UiRect::all(px(1)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.12, 0.09, 0.06, 0.8)),
-                BorderColor::all(SLOT_BORDER),
-            ))
-            .with_children(|e| {
-                for (slot, x, y, h) in EQUIP_LAYOUT {
-                    let hh = SLOT * h + (h - 1.0) * 2.0;
-                    e.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(x),
-                            top: px(y),
-                            width: px(SLOT),
-                            height: px(hh),
-                            border: UiRect::all(px(1)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BackgroundColor(SLOT_BG),
-                        BorderColor::all(SLOT_BORDER),
-                        RelativeCursorPosition::default(),
-                        EquipNode(slot),
-                    ))
-                    .with_children(|s| {
-                        s.spawn((
-                            Node {
-                                position_type: PositionType::Absolute,
-                                width: Val::Percent(100.0),
-                                height: Val::Percent(100.0),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                            children![text(&ui, slot.name(), 8.0, TEXT_DIM)],
-                        ));
-                        s.spawn((
-                            Node {
-                                width: px(SLOT - 2.0),
-                                height: px(hh - 2.0),
-                                ..default()
-                            },
-                            ImageNode::default(),
-                            Visibility::Hidden,
-                            EquipIcon(slot),
-                        ));
-                    });
-                }
-            });
-            // Sayfa sekmeleri
-            w.spawn(Node {
-                column_gap: px(6),
-                ..default()
-            })
-            .with_children(|t| {
-                for (i, label) in ["I", "II"].iter().enumerate() {
-                    t.spawn((
-                        Button,
-                        Node {
-                            width: px(44),
-                            height: px(20),
-                            border: UiRect::all(px(1)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BackgroundColor(SLOT_BG),
-                        BorderColor::all(SLOT_BORDER),
-                        PageTab(i),
-                    ))
-                    .with_child(text(&ui, *label, 13.0, TEXT));
-                }
-            });
-            // Izgara
-            w.spawn((
-                Node {
-                    width: px(grid_w),
-                    height: px(grid_h),
-                    ..default()
-                },
-                RelativeCursorPosition::default(),
-                GridArea,
-            ))
-            .with_children(|g| {
-                for r in 0..ROWS {
-                    for c in 0..COLS {
-                        g.spawn((
-                            Node {
-                                position_type: PositionType::Absolute,
-                                left: px(c as f32 * PITCH),
-                                top: px(r as f32 * PITCH),
-                                width: px(SLOT),
-                                height: px(SLOT),
-                                border: UiRect::all(px(1)),
-                                ..default()
-                            },
-                            BackgroundColor(SLOT_BG),
-                            BorderColor::all(SLOT_BORDER),
-                            CellBg(r * COLS + c),
-                        ));
-                    }
-                }
-                g.spawn((
+    skin::spawn_window(
+        &mut commands,
+        &skin,
+        &ui,
+        Style::Dialog,
+        Node {
+            position_type: PositionType::Absolute,
+            right: px(10),
+            top: px(262),
+            width: px(grid_w + 2.0 * skin::DIALOG_PAD),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(6),
+            ..default()
+        },
+        "Envanter",
+        InvClose,
+    )
+    .insert((Visibility::Hidden, InvWindow))
+    .with_children(|w| {
+        // Ekipman alanı: koyu mermer iç kutu + PaperDoll yuvaları.
+        w.spawn(Node {
+            width: px(grid_w),
+            height: px(158),
+            ..default()
+        })
+        .with_children(|e| {
+            skin::inset_layers(e, &skin, true);
+            for (slot, x, y, h) in EQUIP_LAYOUT {
+                let hh = SLOT * h + (h - 1.0) * 2.0;
+                e.spawn((
                     Node {
                         position_type: PositionType::Absolute,
-                        left: px(0),
-                        top: px(0),
-                        width: Val::Percent(100.0),
-                        height: Val::Percent(100.0),
+                        left: px(x),
+                        top: px(y + 1.0),
+                        width: px(SLOT),
+                        height: px(hh),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
                         ..default()
                     },
-                    ItemLayer,
-                ));
-            });
-            // Yang
-            w.spawn(Node {
-                width: px(grid_w),
-                justify_content: JustifyContent::FlexEnd,
-                ..default()
-            })
-            .with_child((text(&ui, "", 14.0, GOLD), YangText));
+                    skin::slot_image(&skin),
+                    RelativeCursorPosition::default(),
+                    EquipNode(slot),
+                ))
+                .with_children(|s| {
+                    // Boş yuva silüeti (WoW PaperDoll).
+                    s.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(2),
+                            top: px((hh - (SLOT - 4.0)) / 2.0),
+                            width: px(SLOT - 4.0),
+                            height: px(SLOT - 4.0),
+                            ..default()
+                        },
+                        ImageNode::new(skin.doll[slot.index()].clone()),
+                        Pickable::IGNORE,
+                        EquipSil(slot),
+                    ));
+                    s.spawn((
+                        Node {
+                            width: px(SLOT - 2.0),
+                            height: px(hh - 2.0),
+                            ..default()
+                        },
+                        ImageNode::default(),
+                        Visibility::Hidden,
+                        Pickable::IGNORE,
+                        EquipIcon(slot),
+                    ));
+                    s.spawn((skin::slot_hilight(&skin), EquipHi(slot)));
+                });
+            }
         });
+        // Sayfa sekmeleri (WoW karakter sekmeleri).
+        w.spawn(Node {
+            column_gap: px(2),
+            ..default()
+        })
+        .with_children(|t| {
+            for (i, label) in ["I", "II"].iter().enumerate() {
+                t.spawn((skin::tab_button(&skin, &ui, label, 56.0), PageTab(i)));
+            }
+        });
+        // Izgara
+        w.spawn((
+            Node {
+                width: px(grid_w),
+                height: px(grid_h),
+                ..default()
+            },
+            RelativeCursorPosition::default(),
+            GridArea,
+        ))
+        .with_children(|g| {
+            for r in 0..ROWS {
+                for c in 0..COLS {
+                    g.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(c as f32 * PITCH),
+                            top: px(r as f32 * PITCH),
+                            width: px(SLOT),
+                            height: px(SLOT),
+                            ..default()
+                        },
+                        skin::slot_image(&skin),
+                        Pickable::IGNORE,
+                        CellBg(r * COLS + c),
+                    ));
+                }
+            }
+            g.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(0),
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                ItemLayer,
+            ));
+            // Üstüne gelinen eşyanın vurgusu (ikonun üstünde, WoW gibi).
+            g.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: px(SLOT),
+                    height: px(SLOT),
+                    ..default()
+                },
+                ImageNode::new(skin.slot_hi.clone()).with_mode(NodeImageMode::Stretch),
+                Visibility::Hidden,
+                Pickable::IGNORE,
+                GridHi,
+            ));
+        });
+        // Yang (WoW altın sikkesiyle)
+        w.spawn(Node {
+            width: px(grid_w),
+            justify_content: JustifyContent::FlexEnd,
+            align_items: AlignItems::Center,
+            padding: UiRect::right(px(4)),
+            ..default()
+        })
+        .with_children(|y| {
+            y.spawn((text(&ui, "", 14.0, TEXT), skin::shadow(), YangText));
+            y.spawn(skin::coin(&skin));
+        });
+    });
 
     // Sürüklenen ikon.
     commands.spawn((
@@ -318,20 +327,94 @@ fn show_hide(w: Res<Windows>, mut q: Query<&mut Visibility, With<InvWindow>>) {
 }
 
 fn page_tabs(
+    skin: Option<Res<Skin>>,
     mut page: ResMut<InvPage>,
-    mut q: Query<(&PageTab, &Interaction, &mut BackgroundColor), With<Button>>,
+    mut q: Query<(&PageTab, &Interaction, &mut ImageNode, &Children), With<Button>>,
+    mut his: Query<&mut Visibility, With<skin::SkinHi>>,
+    mut texts: Query<&mut TextColor>,
 ) {
-    for (t, i, mut bg) in &mut q {
+    let Some(skin) = skin else { return };
+    for (t, i, _, _) in &q {
         if *i == Interaction::Pressed && page.0 != t.0 {
             page.0 = t.0;
         }
-        bg.0 = if page.0 == t.0 {
-            Color::srgb(0.35, 0.26, 0.12)
-        } else if *i == Interaction::Hovered {
-            Color::srgb(0.2, 0.15, 0.08)
-        } else {
-            SLOT_BG
+    }
+    for (t, i, mut img, ch) in &mut q {
+        skin::set_tab(&skin, page.0 == t.0, *i != Interaction::None, &mut img, ch, &mut his, &mut texts);
+    }
+}
+
+/// Test kancası: `AZM_HOVER=cell:3` ya da `equip:weapon` imleç yokken o noktayı "üstünde"
+/// sayar (ekran görüntüsünde vurgu + tooltip doğrulaması için). Gerçek imleç her zaman önceliklidir.
+fn env_hover(mut hovered: ResMut<Hovered>, page: Res<InvPage>, mut spot: Local<Option<Option<Spot>>>) {
+    let want = *spot.get_or_insert_with(|| {
+        let v = std::env::var("AZM_HOVER").ok()?.to_lowercase();
+        let (k, arg) = v.split_once(':')?;
+        match k {
+            "cell" => arg.trim().parse().ok().map(Spot::Cell),
+            "equip" => EquipSlot::ALL
+                .iter()
+                .find(|s| format!("{:?}", s).to_lowercase() == arg.trim())
+                .map(|s| Spot::Equip(*s)),
+            _ => None,
+        }
+    });
+    if hovered.0.is_none() {
+        if let Some(Spot::Cell(i)) = want {
+            hovered.0 = Some(Spot::Cell(page.0 * COLS * ROWS + i % (COLS * ROWS)));
+        } else if want.is_some() {
+            hovered.0 = want;
+        }
+    }
+}
+
+/// Kapat düğmesi ve vurgular: üstüne gelinen hücre/eşya ve ekipman yuvası parlar, dolu yuvada
+/// silüet gizlenir.
+fn hover_visuals(
+    hovered: Res<Hovered>,
+    inv: Res<Inventory>,
+    page: Res<InvPage>,
+    mut w: ResMut<Windows>,
+    close: Query<&Interaction, (With<InvClose>, Changed<Interaction>)>,
+    mut grid_hi: Query<(&mut Node, &mut Visibility), With<GridHi>>,
+    mut equip_hi: Query<(&EquipHi, &mut Visibility), (Without<GridHi>, Without<EquipSil>)>,
+    mut sils: Query<(&EquipSil, &mut Visibility), (Without<GridHi>, Without<EquipHi>)>,
+) {
+    if close.iter().any(|i| *i == Interaction::Pressed) {
+        w.inventory = false;
+    }
+    if let Ok((mut n, mut v)) = grid_hi.single_mut() {
+        let base = page.0 * COLS * ROWS;
+        let target = match hovered.0 {
+            Some(Spot::Cell(i)) if i >= base && i < base + COLS * ROWS => {
+                let head = inv.head_of(i).unwrap_or(i);
+                let h = inv.item_at(head).map(|it| it.def().height as usize).unwrap_or(1);
+                let k = head.saturating_sub(base);
+                Some((k % COLS, k / COLS, h))
+            }
+            _ => None,
         };
+        match target {
+            Some((c, r, h)) => {
+                n.left = px(c as f32 * PITCH);
+                n.top = px(r as f32 * PITCH);
+                n.height = px(h as f32 * PITCH - 2.0);
+                *v = Visibility::Inherited;
+            }
+            None => *v = Visibility::Hidden,
+        }
+    }
+    for (e, mut v) in &mut equip_hi {
+        let want = if hovered.0 == Some(Spot::Equip(e.0)) { Visibility::Inherited } else { Visibility::Hidden };
+        if *v != want {
+            *v = want;
+        }
+    }
+    for (s, mut v) in &mut sils {
+        let want = if inv.equipped(s.0).is_some() { Visibility::Hidden } else { Visibility::Inherited };
+        if *v != want {
+            *v = want;
+        }
     }
 }
 
@@ -358,7 +441,6 @@ fn hover_and_mouse(
         MessageWriter<SellItem>,
     ),
     (mut log, time): (ResMut<GameLog>, Res<Time>),
-    mut cells: Query<(&CellBg, &mut BorderColor)>,
 ) {
     // İmlecin altını bul.
     let mut spot = None;
@@ -398,17 +480,6 @@ fn hover_and_mouse(
         }
     }
     hovered.0 = spot;
-
-    // Hücre vurgusu.
-    let hl_head = match spot {
-        Some(Spot::Cell(i)) => Some(inv.head_of(i).unwrap_or(i)),
-        _ => None,
-    };
-    for (c, mut b) in &mut cells {
-        let i = page.0 * COLS * ROWS + c.0;
-        let on = hl_head.is_some_and(|h| inv.head_of(i) == Some(h) || i == h);
-        *b = BorderColor::all(if on { SLOT_HOVER } else { SLOT_BORDER });
-    }
 
     let now = time.elapsed_secs();
     // Sürükleme başlat.
@@ -552,7 +623,7 @@ fn redraw_items(
                             ..default()
                         },
                         text(&ui, it.count.to_string(), 11.0, TEXT),
-                        TextShadow::default(),
+                        skin::shadow(),
                     ));
                 }
                 if it.def().upgradable() && it.plus > 0 {
@@ -564,7 +635,7 @@ fn redraw_items(
                             ..default()
                         },
                         text(&ui, format!("+{}", it.plus), 11.0, crate::game::loot::item_color(&it)),
-                        TextShadow::default(),
+                        skin::shadow(),
                     ));
                 }
             });
@@ -582,7 +653,7 @@ fn redraw_items(
         }
     }
     if let Ok(mut t) = yang.single_mut() {
-        t.0 = format!("{} Yang", thousands(inv.yang));
+        t.0 = thousands(inv.yang);
     }
 }
 

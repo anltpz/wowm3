@@ -9,6 +9,7 @@ use benilla_assets::WorldAssets;
 pub mod hud;
 pub mod inventory_ui;
 pub mod shop_ui;
+pub mod skin;
 pub mod tooltip;
 pub mod upgrade_ui;
 pub mod world_ui;
@@ -37,9 +38,11 @@ pub struct BlocksWorld;
 // Metin2 renk paleti: koyu kahve paneller, altın kenarlar.
 pub const PANEL_BG: Color = Color::srgba(0.07, 0.055, 0.04, 0.93);
 pub const PANEL_BORDER: Color = Color::srgb(0.62, 0.48, 0.24);
+#[allow(dead_code)]
 pub const TITLE_BG: Color = Color::srgba(0.18, 0.12, 0.06, 0.98);
 pub const SLOT_BG: Color = Color::srgba(0.015, 0.015, 0.015, 0.9);
 pub const SLOT_BORDER: Color = Color::srgb(0.32, 0.26, 0.16);
+#[allow(dead_code)]
 pub const SLOT_HOVER: Color = Color::srgb(0.85, 0.7, 0.3);
 pub const TEXT: Color = Color::srgb(0.93, 0.9, 0.82);
 pub const TEXT_DIM: Color = Color::srgb(0.65, 0.6, 0.52);
@@ -49,7 +52,7 @@ pub fn plugin(app: &mut App) {
     app.init_resource::<Windows>()
         .add_systems(Startup, setup.after(benilla_assets::AssetSet::Open))
         .add_systems(PreUpdate, update_hover.after(bevy::ui::UiSystems::Focus))
-        .add_systems(Update, toggle_windows)
+        .add_systems(Update, (toggle_windows, env_open))
         .add_plugins((
             hud::plugin,
             world_ui::plugin,
@@ -57,6 +60,7 @@ pub fn plugin(app: &mut App) {
             tooltip::plugin,
             upgrade_ui::plugin,
             shop_ui::plugin,
+            skin::plugin,
         ));
 }
 
@@ -108,6 +112,43 @@ fn toggle_windows(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Windows>) {
             w.inventory = false;
             w.help = false;
         }
+    }
+}
+
+/// `AZM_OPEN=inv,shop,upgrade` (virgülle; `help` de olur): pencereleri açılışta açar (ekran
+/// görüntüsü testleri). NPC'ler doğana kadar (en çok 15 sn) her karede yeniden uygulanır; çünkü
+/// `npc::auto_close` yakında NPC yokken mağaza/demirci pencerelerini hemen kapatır.
+fn env_open(
+    time: Res<Time>,
+    mut w: ResMut<Windows>,
+    npcs: Query<(), With<crate::game::npc::Npc>>,
+    mut state: Local<Option<Vec<String>>>,
+    mut done: Local<bool>,
+) {
+    if *done {
+        return;
+    }
+    let list = state.get_or_insert_with(|| {
+        std::env::var("AZM_OPEN")
+            .map(|v| v.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect())
+            .unwrap_or_default()
+    });
+    if list.is_empty() {
+        *done = true;
+        return;
+    }
+    for k in list.iter() {
+        match k.as_str() {
+            "inv" | "inventory" | "envanter" => w.inventory = true,
+            "shop" | "tuccar" | "satici" => w.shop = true,
+            "upgrade" | "demirci" => w.upgrade = true,
+            "help" | "yardim" => w.help = true,
+            _ => {}
+        }
+    }
+    if !npcs.is_empty() || time.elapsed_secs() > 15.0 {
+        info!("ui: AZM_OPEN uygulandı: {:?}", list);
+        *done = true;
     }
 }
 
