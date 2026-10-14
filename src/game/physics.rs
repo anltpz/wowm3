@@ -17,8 +17,7 @@ pub fn indoor() -> bool {
     INDOOR.load(Ordering::Relaxed)
 }
 
-/// `INDOOR` bayrağını yazar.
-#[allow(dead_code)]
+/// `INDOOR` bayrağını yazar (zindan girişi/çıkışı).
 pub fn set_indoor(on: bool) {
     INDOOR.store(on, Ordering::Relaxed);
 }

@@ -36,11 +36,13 @@ pub enum NpcKind {
     /// Görev veren köylüler (Uriel, Octavio, Baek-Go, Soon).
     Villager,
     Fisherman,
+    /// Zindan rehberi (G-26): konuşunca zindan giriş teklifi açılır (`dungeon::entry`); değer = zindan kimliği.
+    DungeonGuide(u32),
 }
 
 impl NpcKind {
     #[allow(dead_code)] // testler ve Sprint 3 diyalog sistemi (G-05)
-    pub const ALL: [NpcKind; 13] = [
+    pub const ALL: [NpcKind; 14] = [
         NpcKind::Blacksmith,
         NpcKind::Merchant,
         NpcKind::WeaponMerchant,
@@ -54,6 +56,7 @@ impl NpcKind {
         NpcKind::Trainer,
         NpcKind::Villager,
         NpcKind::Fisherman,
+        NpcKind::DungeonGuide(0),
     ];
 
     /// Mağaza penceresi açan türler.
@@ -77,6 +80,7 @@ impl NpcKind {
             NpcKind::Trainer => "Bedenini çelik, kılıcını yıldırım gibi yapmayı öğretirim.",
             NpcKind::Villager => "Selam, yabancı! Köyümüze hoş geldin.",
             NpcKind::Fisherman => "Şşş, balıkları kaçırma! Sabırlı olan en büyüğünü tutar.",
+            NpcKind::DungeonGuide(_) => "Zindanın kapısı burada. Hazırsan seni içeri alırım.",
         }
     }
 }
