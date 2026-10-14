@@ -106,6 +106,8 @@ pub struct NpcDef {
     pub map: (f32, f32),
     /// Baktığı harita noktası.
     pub face: (f32, f32),
+    /// Yükseklik: Elwynn tablosunda WoW z (Pyungmoo'da arazi yüksekliği kullanılır, 0).
+    pub z: f32,
     /// 8 yuva: gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard.
     pub armor: ArmorSet,
     /// Sağ eldeki eşya (ItemDisplayInfo).
@@ -176,6 +178,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Blacksmith,
         map: (393.0, 692.0),
         face: SQUARE,
+        z: 0.0,
         armor: SMITH,
         tool: Some(HAMMER),
         look: M_DARK,
@@ -187,6 +190,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Merchant,
         map: (383.0, 693.0),
         face: SQUARE,
+        z: 0.0,
         armor: MERCHANT,
         tool: Some(POTION_BLUE),
         look: F_YOUNG,
@@ -198,6 +202,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::WeaponMerchant,
         map: (430.0, 607.0),
         face: SQUARE,
+        z: 0.0,
         armor: WEAPONS,
         tool: Some(LONG_SWORD),
         look: M_BROWN,
@@ -209,6 +214,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::ArmorMerchant,
         map: (403.0, 586.0),
         face: SQUARE,
+        z: 0.0,
         armor: ARMORS,
         tool: Some(MACE),
         look: M_DARK,
@@ -220,6 +226,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Warehouse,
         map: (315.0, 560.0),
         face: (330.0, 575.0),
+        z: 0.0,
         armor: KEEPER,
         tool: Some(LANTERN),
         look: M_GRAY,
@@ -231,6 +238,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Stable,
         map: (396.0, 735.0),
         face: (396.0, 715.0),
+        z: 0.0,
         armor: GROOM,
         tool: Some(PITCHFORK),
         look: M_BLOND,
@@ -242,6 +250,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::FortuneTeller,
         map: (417.0, 671.0),
         face: SQUARE,
+        z: 0.0,
         armor: ROBE_BROWN,
         tool: Some(POTION_PURPLE),
         look: F_OLD,
@@ -253,6 +262,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Guard,
         map: (383.0, 640.0),
         face: SQUARE,
+        z: 0.0,
         armor: GUARD,
         tool: Some(HALBERD),
         look: M_BROWN,
@@ -264,6 +274,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Guard,
         map: (468.0, 714.0),
         face: (490.0, 725.0),
+        z: 0.0,
         armor: SENTRY,
         tool: Some(SPEAR),
         look: M_DARK,
@@ -275,6 +286,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Teleporter,
         map: (432.0, 685.0),
         face: SQUARE,
+        z: 0.0,
         armor: MAGE,
         tool: Some(STAFF_BLUE),
         look: M_GRAY,
@@ -287,6 +299,7 @@ pub const NPCS: &[NpcDef] = &[
         // Wiki koordinatı (286, 639) kışlanın içinde kalıyor (QA H1): kışlanın güneyindeki avluda, doğu kapısına bakar.
         map: (300.0, 663.0),
         face: (312.0, 662.0),
+        z: 0.0,
         armor: CAPTAIN,
         tool: Some(SILVER_SWORD),
         look: M_BROWN,
@@ -298,6 +311,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Trainer,
         map: (444.0, 623.0),
         face: SQUARE,
+        z: 0.0,
         armor: TRAINER,
         tool: Some(DRAGON_SWORD),
         look: M_BLOND,
@@ -309,6 +323,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Villager,
         map: (425.0, 716.0),
         face: SQUARE,
+        z: 0.0,
         armor: PRIEST,
         tool: Some(STAFF_LONG),
         look: M_GRAY,
@@ -320,6 +335,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Villager,
         map: (340.0, 747.0),
         face: SQUARE,
+        z: 0.0,
         armor: ROGUE,
         tool: Some(DAGGER),
         look: M_DARK,
@@ -331,6 +347,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Villager,
         map: (465.0, 612.0),
         face: SQUARE,
+        z: 0.0,
         armor: HEALER,
         tool: Some(POTION_GREEN),
         look: M_GRAY,
@@ -342,6 +359,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Villager,
         map: (454.0, 530.0),
         face: (440.0, 560.0),
+        z: 0.0,
         armor: PEASANT,
         tool: Some(PICK),
         look: M_BLOND,
@@ -353,6 +371,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Fisherman,
         map: (428.0, 480.0),
         face: (428.0, 470.0),
+        z: 0.0,
         armor: FISHER,
         tool: Some(FISHING_POLE),
         look: M_BROWN,
@@ -364,6 +383,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Fisherman,
         map: (386.0, 849.0),
         face: (386.0, 860.0),
+        z: 0.0,
         armor: FISHER,
         tool: Some(FISHING_POLE),
         look: M_GRAY,
@@ -375,6 +395,7 @@ pub const NPCS: &[NpcDef] = &[
         kind: NpcKind::Teleporter,
         map: (125.0, 1118.0),
         face: (140.0, 1110.0),
+        z: 0.0,
         armor: ROBE_WHITE,
         tool: Some(WALKING_STAFF),
         look: M_GRAY,
@@ -382,8 +403,191 @@ pub const NPCS: &[NpcDef] = &[
     },
 ];
 
-/// Elwynn (eski) modunda başlangıca göre (Bevy x, z) ofsetiyle doğan NPC'ler: yalnızca Demirci ve Satıcı.
-const ELWYNN_OFFSETS: &[(usize, f32, f32, f32)] = &[(0, 5.0, -3.0, 0.6), (1, -5.0, -3.0, -0.6)];
+
+/// Orijinal WoW NPC'leri (Elwynn Forest): `map` = WoW (x, y), `z` = WoW z, `face` = baktığı WoW (x, y).
+/// Northshire Manastırı (-8897, -178) çevresi ve Goldshire hanı (-9464, 24) / demirhanesi (-9460, 94) önü.
+/// Görevleri bu oyunun sistemlerine bağlı: Demirci artı basar, satıcılar kendi stoklarını satar, Erma binek verir.
+pub const ELWYNN_NPCS: &[NpcDef] = &[
+    // --- Northshire ---
+    NpcDef {
+        name: "Mareşal McBride",
+        title: "Northshire Muhafızları",
+        kind: NpcKind::Captain,
+        map: (-8902.6, -162.6),
+        face: (-8950.0, -132.0),
+        z: 81.9,
+        armor: GUARD,
+        tool: Some(LONG_SWORD),
+        look: M_GRAY,
+        greet: "Kobold ve Defias'lar vadiyi bastı, ama asıl tehlike ormana düşen Metin taşları. Onları kır, asker!",
+    },
+    NpcDef {
+        name: "Yardımcı Willem",
+        title: "Northshire Muhafızı",
+        kind: NpcKind::Guard,
+        map: (-8933.5, -136.5),
+        face: (-8960.0, -130.0),
+        z: 83.3,
+        armor: GUARD,
+        tool: Some(HALBERD),
+        look: M_BROWN,
+        greet: "Selam, yolcu. Mareşal McBride manastırın içinde, seninle konuşmak istiyor.",
+    },
+    NpcDef {
+        name: "Kardeş Danil",
+        title: "Genel Malzeme",
+        kind: NpcKind::Merchant,
+        map: (-8901.6, -112.7),
+        face: (-8930.0, -120.0),
+        z: 81.8,
+        armor: PRIEST,
+        tool: None,
+        look: M_BLOND,
+        greet: "Işık seninle olsun. Yolculuğun için iksir ve parşömen ister misin?",
+    },
+    NpcDef {
+        name: "Godric Rothgar",
+        title: "Zırhçı ve Kalkancı",
+        kind: NpcKind::ArmorMerchant,
+        map: (-8898.2, -119.8),
+        face: (-8930.0, -125.0),
+        z: 81.8,
+        armor: SMITH,
+        tool: Some(HAMMER),
+        look: M_DARK,
+        greet: "Sağlam bir zırh olmadan vadiden çıkma. Bak bakalım ne var elimde.",
+    },
+    NpcDef {
+        name: "Janos Hammerknuckle",
+        title: "Silah Ustası",
+        kind: NpcKind::WeaponMerchant,
+        map: (-8872.0, -205.0),
+        face: (-8900.0, -190.0),
+        z: 81.0,
+        armor: WEAPONS,
+        tool: Some(MACE),
+        look: M_DARK,
+        greet: "İyi bir silah, iyi bir dosttur. Kobold'lara karşı neyle gidiyorsun?",
+    },
+    NpcDef {
+        name: "Llane Beshere",
+        title: "Savaşçı Eğitmeni",
+        kind: NpcKind::Trainer,
+        map: (-8914.6, -215.7),
+        face: (-8900.0, -180.0),
+        z: 82.1,
+        armor: TRAINER,
+        tool: Some(LONG_SWORD),
+        look: M_BROWN,
+        greet: "Kılıcını kaldır ve duruşuna dikkat et. Gerçek savaşçı önce dayanmayı öğrenir.",
+    },
+    // --- Goldshire ---
+    NpcDef {
+        name: "Mareşal Dughan",
+        title: "Goldshire Muhafızları",
+        kind: NpcKind::Captain,
+        map: (-9465.5, 73.9),
+        face: (-9430.0, 70.0),
+        z: 56.6,
+        armor: CAPTAIN,
+        tool: Some(SILVER_SWORD),
+        look: M_GRAY,
+        greet: "Goldshire'a hoş geldin. Batıda Riverpaw gnolları ve Hogger huzur vermiyor.",
+    },
+    NpcDef {
+        name: "Han Sahibi Farley",
+        title: "Han Sahibi",
+        kind: NpcKind::Villager,
+        map: (-9462.7, 16.2),
+        face: (-9440.0, 20.0),
+        z: 57.0,
+        armor: PEASANT,
+        tool: None,
+        look: M_BLOND,
+        greet: "Aslan Gururu Hanı'na hoş geldin! Ateşin başında ısın, yorgun savaşçı.",
+    },
+    NpcDef {
+        name: "Brog Hamfist",
+        title: "Genel Malzeme",
+        kind: NpcKind::Merchant,
+        map: (-9447.0, 32.0),
+        face: (-9430.0, 40.0),
+        z: 57.0,
+        armor: MERCHANT,
+        tool: None,
+        look: M_DARK,
+        greet: "Ne lazımsa var bende: iksir, parşömen, bileme taşı...",
+    },
+    NpcDef {
+        name: "Demirci Argus",
+        title: "Demirci",
+        kind: NpcKind::Blacksmith,
+        map: (-9448.0, 92.0),
+        face: (-9430.0, 85.0),
+        z: 57.0,
+        armor: SMITH,
+        tool: Some(HAMMER),
+        look: M_DARK,
+        greet: "Silahını güçlendirmeye mi geldin? Örs sıcak, ama şans her zaman yanında olmaz!",
+    },
+    NpcDef {
+        name: "Corina Steele",
+        title: "Silah Satıcısı",
+        kind: NpcKind::WeaponMerchant,
+        map: (-9447.0, 104.0),
+        face: (-9430.0, 100.0),
+        z: 57.0,
+        armor: WEAPONS,
+        tool: Some(DAGGER),
+        look: F_YOUNG,
+        greet: "Goldshire'ın en iyi kılıçları bende. Bir göz at.",
+    },
+    NpcDef {
+        name: "Andrew Krighton",
+        title: "Zırh Satıcısı",
+        kind: NpcKind::ArmorMerchant,
+        map: (-9448.0, 80.0),
+        face: (-9430.0, 80.0),
+        z: 57.0,
+        armor: ARMORS,
+        tool: None,
+        look: M_BROWN,
+        greet: "Zırh mı? Hem plaka hem zincir var, ölçünü alalım.",
+    },
+    NpcDef {
+        name: "Erma",
+        title: "Ahır Ustası",
+        kind: NpcKind::Stable,
+        map: (-9440.0, 0.0),
+        face: (-9430.0, 20.0),
+        z: 57.0,
+        armor: GROOM,
+        tool: Some(PITCHFORK),
+        look: F_OLD,
+        greet: "Ahırda bir Ölümsüz Savaş Atı var. Bileti al, Elwynn'i rüzgâr gibi dolaş!",
+    },
+    NpcDef {
+        name: "Stormwind Muhafızı",
+        title: "Goldshire",
+        kind: NpcKind::Guard,
+        map: (-9425.0, 60.0),
+        face: (-9400.0, 60.0),
+        z: 58.0,
+        armor: GUARD,
+        tool: Some(HALBERD),
+        look: M_BROWN,
+        greet: "Goldshire güvende, ama ormanda gözünü dört aç.",
+    },
+];
+
+/// Açık haritaya göre NPC tablosu (Pyungmoo ya da orijinal WoW Elwynn).
+pub fn npc_table() -> &'static [NpcDef] {
+    if super::terrain::data().is_some() {
+        NPCS
+    } else {
+        ELWYNN_NPCS
+    }
+}
 
 /// Wiki koordinatı engelliyse en fazla bu kadar metre içinde açık nokta aranır.
 const NUDGE_MAX: f32 = 6.0;
@@ -503,19 +707,21 @@ fn spawn_npcs(
             }
         }
         None => {
-            let start = wow_to_bevy(super::start_wow());
-            for &(i, dx, dz, yaw) in ELWYNN_OFFSETS {
-                let mut at = start + Vec3::new(dx, 0.0, dz);
-                match super::physics::ground_at(&col, at) {
-                    Some(g) => at.y = g,
-                    None => return, // arazi henüz yok, sonra dene
+            // Orijinal WoW: tablodaki WoW konumları (z dahil); yakındaysa zemine oturtulur.
+            for (i, n) in ELWYNN_NPCS.iter().enumerate() {
+                let mut at = wow_to_bevy([n.map.0, n.map.1, n.z]);
+                if let Some(g) = super::physics::ground_at(&col, at).filter(|g| (g - at.y).abs() < 3.0) {
+                    at.y = g;
                 }
-                places.push((i, at, Quat::from_rotation_y(yaw)));
+                // WoW (x, y) → Bevy düzlemi (-y, -x).
+                let from = Vec2::new(-n.map.1, -n.map.0);
+                let to = Vec2::new(-n.face.1, -n.face.0);
+                places.push((i, at, facing(from, to)));
             }
         }
     }
     for (i, at, rot) in &places {
-        let n = &NPCS[*i];
+        let n = &npc_table()[*i];
         let wm = build_body_as(&db, wa, &mut images, &server, &n.armor, &n.look);
         commands.spawn((
             wm,
@@ -569,7 +775,7 @@ fn talk(
     log: &mut GameLog,
     out: &mut MessageWriter<NpcTalked>,
 ) {
-    let line = match NPCS.get(npc.row) {
+    let line = match npc_table().get(npc.row) {
         Some(def) => greeting_line(def),
         None => format!("{}: {}", npc.name, npc.kind.greeting()),
     };
@@ -745,10 +951,13 @@ mod tests {
         world.init_resource::<Windows>();
         world.init_resource::<GameLog>();
         world.init_resource::<Messages<NpcTalked>>();
-        let rows: Vec<Entity> = [0usize, 2, 4]
+        // Açık haritanın tablosu (testte arazi yok: orijinal WoW Elwynn): Demirci, Silah Satıcısı, Han Sahibi.
+        let t = npc_table();
+        let idx = |k: NpcKind| t.iter().position(|n| n.kind == k).unwrap();
+        let rows: Vec<Entity> = [idx(NpcKind::Blacksmith), idx(NpcKind::WeaponMerchant), idx(NpcKind::Villager)]
             .iter()
             .map(|&i| {
-                let n = &NPCS[i];
+                let n = &t[i];
                 world.spawn(Npc { name: n.name, title: n.title, kind: n.kind, row: i }).id()
             })
             .collect();
@@ -772,14 +981,31 @@ mod tests {
             vec![
                 (rows[0], NpcKind::Blacksmith),
                 (rows[1], NpcKind::WeaponMerchant),
-                (rows[2], NpcKind::Warehouse)
+                (rows[2], NpcKind::Villager)
             ]
         );
         let log = world.resource::<GameLog>();
         assert_eq!(log.lines.len(), 3);
-        assert!(log.lines[2].text.starts_with("Depocu: "));
+        assert!(log.lines[2].text.starts_with(&format!("{}: ", t[idx(NpcKind::Villager)].name)));
         let w = world.resource::<Windows>();
         // Son konuşulan Silah Satıcısı mağazayı açtı (Demirci'nin yükseltmesini kapattı).
         assert!(w.shop && w.inventory && !w.upgrade);
+    }
+}
+
+#[cfg(test)]
+mod elwynn_tests {
+    use super::*;
+
+    /// Orijinal WoW NPC'leri Northshire ya da Goldshire'da; oyunun bütün işlevleri bir NPC'de.
+    #[test]
+    fn elwynn_npcs_in_villages_and_cover_roles() {
+        for n in ELWYNN_NPCS {
+            let zone = crate::game::elwynn::subzone([n.map.0, n.map.1, n.z]);
+            assert!(zone == "Northshire Valley" || zone == "Goldshire", "{} köyde değil: {zone}", n.name);
+        }
+        for k in [NpcKind::Blacksmith, NpcKind::Merchant, NpcKind::WeaponMerchant, NpcKind::ArmorMerchant, NpcKind::Stable, NpcKind::Captain] {
+            assert!(ELWYNN_NPCS.iter().any(|n| n.kind == k), "{k:?} yok");
+        }
     }
 }

@@ -644,7 +644,7 @@ fn update_bars(
     stats: Res<PlayerStats>,
     d: Res<Derived>,
     inv: Res<Inventory>,
-    quest: Res<Quest>,
+    (quest, player): (Res<Quest>, Query<&Transform, With<Player>>),
     mut texts: Query<(&HudText, &mut Text)>,
     mut hp: Query<&mut Node, (With<FrameHpFill>, Without<FrameSpFill>, Without<ExpFill>)>,
     mut sp: Query<&mut Node, (With<FrameSpFill>, Without<FrameHpFill>, Without<ExpFill>)>,
@@ -681,7 +681,12 @@ fn update_bars(
             HudText::FrameSp => format!("{} / {}", stats.sp.max(0), d.max_sp),
             HudText::Exp => format!("EXP %{:.1}", ef * 100.0),
             // WoW mini harita şeridine sığan kısa ad.
-            HudText::Zone => if crate::game::terrain::data().is_some() { "Pyungmoo".to_string() } else { "Elwynn Forest".to_string() },
+            // WoW mini harita şeridi: bulunulan alt bölge (Northshire Valley, Goldshire...).
+            HudText::Zone => match (crate::game::terrain::data(), player.single()) {
+                (Some(_), _) => "Pyungmoo".to_string(),
+                (None, Ok(p)) => crate::game::elwynn::subzone(benilla_assets::coords::bevy_to_wow(p.translation)).to_string(),
+                (None, Err(_)) => "Elwynn Forest".to_string(),
+            },
             HudText::Quest => quest.text(),
             HudText::RageTime => {
                 if raging { format!("{:.0}", stats.rage_until - now) } else { String::new() }

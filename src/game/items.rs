@@ -241,6 +241,12 @@ pub const V_SOUL_CRYSTAL: u32 = 30011;
 pub const V_BLESSING: u32 = 25040;
 pub const V_HANDBOOK: u32 = 25041;
 pub const V_DRAGON_SCALE: u32 = 25042;
+pub const V_LINEN: u32 = 30012;
+pub const V_CANDLE: u32 = 30013;
+pub const V_SPIDER_LEG: u32 = 30014;
+pub const V_MURLOC_FIN: u32 = 30015;
+pub const V_BANDANA: u32 = 30016;
+pub const V_GNOLL_PAW: u32 = 30017;
 pub const V_RIDE_TICKET: u32 = 50050;
 pub const V_HORSE_MEDAL: u32 = 50051;
 
@@ -309,6 +315,13 @@ pub const ITEMS: &[ItemDef] = &[
     misc(V_WHITE_RIBBON, "Tuhaf Toz", "INV_Enchant_DustStrange", Kind::Material, 200, 50), // Strange Dust
     misc(V_SPIRIT_STONE, "Ağır Taş", "INV_Stone_09", Kind::Material, 200, 100), // Heavy Stone
     misc(V_SOUL_CRYSTAL, "Arkanit Kristali", "INV_Misc_Gem_Sapphire_01", Kind::Material, 200, 400), // Arcanite Crystal
+    // Elwynn düşürmeleri
+    misc(V_LINEN, "Keten Kumaş", "INV_Fabric_Linen_01", Kind::Material, 200, 10), // Linen Cloth
+    misc(V_CANDLE, "Büyük Mum", "INV_Misc_Candle_02", Kind::Material, 200, 8), // Large Candle
+    misc(V_SPIDER_LEG, "Yapışkan Örümcek Bacağı", "INV_Misc_MonsterSpiderCarapace_01", Kind::Material, 200, 12), // Gooey Spider Leg
+    misc(V_MURLOC_FIN, "Murloc Yüzgeci", "INV_Misc_MonsterTail_03", Kind::Material, 200, 12), // Murloc Fin
+    misc(V_BANDANA, "Kırmızı Çuval Bandana", "INV_Misc_Bandana_03", Kind::Material, 200, 15), // Red Burlap Bandana
+    misc(V_GNOLL_PAW, "Gnoll Pençesi", "INV_Misc_MonsterClaw_02", Kind::Material, 200, 15), // Gnoll Paw
     // --- Yükseltme yardımcıları ---
     misc(V_BLESSING, "Koruma Parşömeni", "INV_Scroll_07", Kind::Blessing, 200, 500), // Scroll of Protection
     misc(V_HANDBOOK, "Yoğun Bileme Taşı", "INV_Stone_SharpeningStone_05", Kind::Handbook, 200, 800), // Dense Sharpening Stone

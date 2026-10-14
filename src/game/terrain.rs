@@ -58,9 +58,10 @@ struct Bridge {
 
 static DATA: OnceLock<TerrainData> = OnceLock::new();
 
-/// Pyungmoo modu açık mı (varsayılan açık; `AZM_ELWYNN=1` eski Northshire).
+/// Pyungmoo modu açık mı. Varsayılan orijinal WoW haritası (Elwynn Forest, kullanıcı kararı);
+/// Metin2 Pyungmoo yeniden üretimi yalnızca `AZM_PYUNGMOO=1` ile.
 pub fn enabled() -> bool {
-    std::env::var("AZM_ELWYNN").is_err()
+    std::env::var("AZM_PYUNGMOO").is_ok_and(|v| v == "1")
 }
 
 pub fn data() -> Option<&'static TerrainData> {

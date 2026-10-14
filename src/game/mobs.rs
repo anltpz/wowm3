@@ -19,8 +19,14 @@ pub enum Species {
     Boar,
     Bear,
     Tiger,
-    /// Beyaz Yeminli askerler: zırhlı insan modeli.
+    /// Beyaz Yeminli askerler / Defias: zırhlı insan modeli.
     Human,
+    Kobold,
+    Murloc,
+    Spider,
+    Gnoll,
+    /// İri gnoll (Hogger): GnollMelee modeli.
+    GnollBrute,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -47,8 +53,8 @@ pub struct MobDef {
 }
 
 use super::items::{
-    V_BEAR_GALL, V_BEAR_PAW, V_BOAR_PELT, V_BOAR_TUSK, V_TIGER_PELT, V_WHITE_RIBBON, V_WOLF_CLAW,
-    V_WOLF_PELT,
+    V_BANDANA, V_BEAR_GALL, V_BEAR_PAW, V_BOAR_PELT, V_BOAR_TUSK, V_CANDLE, V_GNOLL_PAW, V_LINEN, V_MURLOC_FIN,
+    V_SPIDER_LEG, V_TIGER_PELT, V_WHITE_RIBBON, V_WOLF_CLAW, V_WOLF_PELT,
 };
 
 impl MobDef {
@@ -59,6 +65,11 @@ impl MobDef {
             Species::Bear => "Creature/bear/Bear.m2",
             Species::Tiger => "Creature/Tiger/Tiger.m2",
             Species::Human => "Character/Human/Male/HumanMale.m2",
+            Species::Kobold => "Creature/Kobold/Kobold.m2",
+            Species::Murloc => "Creature/Murloc/Murloc.m2",
+            Species::Spider => "Creature/MineSpider/MineSpider.m2",
+            Species::Gnoll => "Creature/Gnoll/gnoll.m2",
+            Species::GnollBrute => "Creature/GnollMelee/GnollMelee.m2",
         }
     }
     /// Türe özgü düşürmeler (WoW ikonlu Metin2 malzemeleri): (vnum, şans).
@@ -69,7 +80,11 @@ impl MobDef {
             Species::Boar => &[(V_BOAR_TUSK, 0.35), (V_BOAR_PELT, 0.2)],
             Species::Bear => &[(V_BEAR_PAW, 0.3), (V_BEAR_GALL, 0.15)],
             Species::Tiger => &[(V_TIGER_PELT, 0.3), (V_WOLF_CLAW, 0.2)],
-            Species::Human => &[(V_WHITE_RIBBON, 0.2)],
+            Species::Human => &[(V_WHITE_RIBBON, 0.2), (V_LINEN, 0.35), (V_BANDANA, 0.15)],
+            Species::Kobold => &[(V_LINEN, 0.3), (V_CANDLE, 0.35)],
+            Species::Murloc => &[(V_MURLOC_FIN, 0.35), (V_LINEN, 0.2)],
+            Species::Spider => &[(V_SPIDER_LEG, 0.4)],
+            Species::Gnoll | Species::GnollBrute => &[(V_GNOLL_PAW, 0.35), (V_LINEN, 0.3)],
         }
     }
 }
@@ -109,7 +124,8 @@ const fn m(
         speed: match species {
             Species::Bear => 5.0,
             Species::Boar => 5.8,
-            Species::Human => 5.5,
+            Species::Human | Species::Gnoll | Species::GnollBrute | Species::Murloc => 5.5,
+            Species::Kobold => 5.0,
             _ => 6.5,
         },
         aggressive,
@@ -155,7 +171,20 @@ const TIGER_Y: &str = "Creature/Tiger/TigerSkinYellow.blp";
 const TIGER_W: &str = "Creature/Tiger/TigerSkinWhite.blp";
 const TIGER_BS: &str = "Creature/Tiger/TigerSkinBlackStriped.blp";
 
+const WOLF_D: &str = "Creature/Wolf/WolfSkinDiseased.blp";
+const BOAR_I: &str = "Creature/Boar/BoarSkinIvory.blp";
+const KOBOLD: &str = "Creature/Kobold/koboldskinNormal.blp";
+const KOBOLD_A: &str = "Creature/Kobold/koboldskinAlbino.blp";
+const MURLOC: &str = "Creature/Murloc/Sahauginskin.blp";
+const MURLOC_B: &str = "Creature/Murloc/SahauginskinBlue.blp";
+const SPIDER_G: &str = "Creature/MineSpider/MineSpiderSkinGreen.blp";
+const SPIDER_B: &str = "Creature/MineSpider/MineSpiderSkinBlood.blp";
+const GNOLL_RP: &str = "Creature/Gnoll/RiverPawGnollWhelpSkin.blp";
+const GNOLL_HOGGER: &str = "Creature/GnollMelee/RiverPawGnollFighterSkin.blp";
+
 type Set = super::character::ArmorSet;
+/// Defias deri takımı (Leather_A_03DefiasBrown: göğüs, kemer, pantolon, çizme).
+const DEFIAS: Set = [None, Some(8550), Some(8551), Some(8552), Some(8553), None, None, None];
 /// Beyaz Yeminli zırh setleri (gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard).
 const OATH_SOLDIER: Set = [None, Some(16184), Some(3418), Some(3414), Some(25828), Some(4448), Some(25831), None];
 const OATH_ARCHER: Set = [None, Some(2183), None, Some(1882), Some(2198), None, None, None];
@@ -210,6 +239,32 @@ pub const MOBS: &[MobDef] = &[
     boss(m(195, "Scrofa", Species::Boar, BOAR_ARM, 2.0, 31, true, W), 10),
     boss(m(196, "Bera", Species::Bear, BEAR_BL, 1.9, 33, true, [0.8, 0.75, 0.9]), 10),
     boss(m(197, "Tigris", Species::Tiger, TIGER_BS, 2.0, 35, true, W), 10),
+    // --- Elwynn Forest (WoW 1.12) ---
+    m(201, "Genç Kurt", Species::Wolf, WOLF_T, 0.7, 1, false, W), // Young Wolf
+    m(202, "Kobold Haşaratı", Species::Kobold, KOBOLD, 0.85, 1, true, W), // Kobold Vermin
+    m(203, "Kobold İşçisi", Species::Kobold, KOBOLD, 0.95, 3, true, W), // Kobold Worker
+    m(204, "Kobold Amelesi", Species::Kobold, KOBOLD, 1.0, 4, true, W), // Kobold Laborer
+    human(m(205, "Defias Haydudu", Species::Human, "", 1.0, 3, true, W), DEFIAS, 2708), // Defias Thug
+    human(boss(m(206, "Garrick Padfoot", Species::Human, "", 1.05, 5, true, W), 4), DEFIAS, 1542),
+    m(207, "Taşdiş Yaban Domuzu", Species::Boar, BOAR_B, 0.8, 5, false, W), // Stonetusk Boar
+    m(208, "Orman Kurdu", Species::Wolf, WOLF_T, 0.9, 5, false, W), // Timber Wolf
+    m(209, "Uyuz Kurt", Species::Wolf, WOLF_D, 0.9, 6, true, W), // Mangy Wolf
+    m(210, "Orman Örümceği", Species::Spider, SPIDER_G, 0.75, 5, true, W), // Forest Spider
+    m(211, "Kobold Tünelcisi", Species::Kobold, KOBOLD, 1.05, 7, true, W), // Kobold Tunneler
+    m(212, "Kobold Madencisi", Species::Kobold, KOBOLD, 1.05, 7, true, W), // Kobold Miner
+    m(213, "Kobold Jeomansörü", Species::Kobold, KOBOLD_A, 1.0, 8, true, W), // Kobold Geomancer
+    m(214, "Murloc Akıntıkoşucusu", Species::Murloc, MURLOC, 0.9, 6, true, W), // Murloc Streamrunner
+    m(215, "Murloc Toplayıcısı", Species::Murloc, MURLOC_B, 1.0, 9, true, W), // Murloc Forager
+    human(m(216, "Defias Yankesicisi", Species::Human, "", 1.0, 6, true, W), DEFIAS, 2708), // Defias Cutpurse
+    human(m(217, "Defias Eşkıyası", Species::Human, "", 1.0, 9, true, W), DEFIAS, 1542), // Defias Bandit
+    boss(m(218, "Princess", Species::Boar, BOAR_ARM, 1.4, 9, false, W), 4), // Brackwell'in domuzu
+    m(219, "Kayaderi Yaban Domuzu", Species::Boar, BOAR_I, 0.95, 7, false, W), // Rockhide Boar
+    m(220, "Sinsi Kurt", Species::Wolf, WOLF_B, 1.0, 9, true, W), // Prowler
+    m(221, "Genç Orman Ayısı", Species::Bear, BEAR_BR, 0.7, 8, false, W), // Young Forest Bear
+    m(222, "Gri Orman Kurdu", Species::Wolf, WOLF_A, 1.0, 8, true, GREY), // Gray Forest Wolf
+    m(223, "Riverpaw Gnollü", Species::Gnoll, GNOLL_RP, 1.0, 10, true, W), // Riverpaw Gnoll
+    boss(m(224, "Hogger", Species::GnollBrute, GNOLL_HOGGER, 1.25, 11, true, W), 8),
+    boss(m(225, "Mother Fang", Species::Spider, SPIDER_B, 1.4, 10, true, W), 6),
 ];
 
 pub fn mob(id: u32) -> &'static MobDef {
@@ -250,26 +305,11 @@ pub struct Pack {
     pub respawn: f32,
 }
 
-/// Bölgeler (Pyungmoo haritası gelene kadar başlangıca uzaklığa göre): seviye arttıkça uzaklaşır.
-const ZONES: &[(f32, f32, &[u32], usize)] = &[
-    // (iç yarıçap, dış yarıçap, mob türleri, sürü sayısı)
-    (22.0, 60.0, &[101, 102, 103, 105], 7),
-    (55.0, 105.0, &[104, 106, 107, 108, 109, 111], 7),
-    (95.0, 145.0, &[110, 112, 113, 114, 115, 117], 6),
-    (135.0, 185.0, &[116, 118, 119, 120, 121, 125], 6),
-    (170.0, 230.0, &[122, 123, 124, 126, 127, 129, 131], 6),
-    (210.0, 280.0, &[128, 130, 132, 133, 134, 135, 136, 137], 5),
-];
-
-/// Mini patronlar: tek tek, dış bölgelerde.
-const BOSSES: &[(u32, f32)] = &[(190, 130.0), (191, 175.0), (192, 215.0), (193, 240.0), (194, 255.0), (195, 260.0), (196, 265.0), (197, 270.0)];
-
 #[derive(Resource, Default)]
 pub struct Spawner {
-    /// Bekleyen sürü yerleştirme denemeleri: (mob, boyut, iç, dış).
-    pending: Vec<(u32, usize, f32, f32)>,
+    /// Bekleyen sürü yerleştirmeleri (Elwynn): (mob, boyut, WoW merkez, yarıçap). Arazi akınca yerleşir.
+    pending: Vec<(u32, usize, [f32; 3], f32)>,
     init: bool,
-    bosses: Vec<(u32, f32)>,
 }
 
 pub fn plugin(app: &mut App) {
@@ -341,6 +381,11 @@ pub fn spawn_mob(
         Species::Bear => (0.9, 1.9),
         Species::Tiger => (0.7, 1.3),
         Species::Human => (0.45, 1.9),
+        Species::Kobold => (0.45, 1.4),
+        Species::Murloc => (0.45, 1.4),
+        Species::Spider => (0.8, 1.0),
+        Species::Gnoll => (0.5, 1.9),
+        Species::GnollBrute => (0.6, 2.3),
     };
     let mut e = commands.spawn((
         wm,
@@ -540,67 +585,40 @@ fn place_packs(
     if !p.grounded {
         return;
     }
-    let start = benilla_assets::coords::wow_to_bevy(super::start_wow());
+    let mut rng = rand::rng();
     if !sp.init {
         sp.init = true;
-        sp.bosses = BOSSES.to_vec();
-        for (rin, rout, kinds, n) in ZONES {
+        for (kinds, x, y, z, r, n, lo, hi) in super::elwynn::SPAWNS {
             for i in 0..*n {
                 let k = kinds[i % kinds.len()];
-                sp.pending.push((k, rand::rng().random_range(3..=5), *rin, *rout));
+                sp.pending.push((k, rng.random_range(*lo..=*hi), [*x, *y, *z], *r));
             }
         }
     }
-    let ref_y = pxf.translation.y;
-    let mut rng = rand::rng();
-    // Kare başına birkaç deneme (arazi henüz akmadıysa sonra tekrar).
+    let _ = pxf;
+    // Kare başına birkaç deneme: alan henüz akmadıysa (uzak) sonra tekrar denenir.
     let mut tries = 0;
     let mut i = 0;
     while i < sp.pending.len() && tries < 24 {
         tries += 1;
-        let (k, size, rin, rout) = sp.pending[i];
+        let (k, size, c, r) = sp.pending[i];
         let ang = rng.random_range(0.0..std::f32::consts::TAU);
-        let r = rng.random_range(rin..rout);
-        let c = start + Vec3::new(ang.cos() * r, 0.0, ang.sin() * r);
-        let Some(center) = open_ground(&col, &wp, c, ref_y, 25.0) else {
+        let d = r * rng.random_range(0.0f32..1.0).sqrt();
+        let wow = [c[0] + ang.cos() * d, c[1] + ang.sin() * d, c[2]];
+        let Some(center) = open_ground(&col, &wp, benilla_assets::coords::wow_to_bevy(wow), c[2], 60.0) else {
             i += 1;
             continue;
         };
         let pack = commands
-            .spawn((
-                Pack {
-                    mob: k,
-                    size,
-                    center,
-                    alive: 0,
-                    respawn: 0.0,
-                },
-                Transform::from_translation(center),
-            ))
+            .spawn((Pack { mob: k, size, center, alive: 0, respawn: 0.0 }, Transform::from_translation(center)))
             .id();
         sp.pending.swap_remove(i);
         let def = mob(k);
-        info!("mobs: {} x{} @ {:.0} yd", def.name, size, center.distance(start));
+        info!("mobs: {} x{} @ WoW ({:.0}, {:.0})", def.name, size, wow[0], wow[1]);
         for _ in 0..size {
-            let off = Vec3::new(rng.random_range(-5.0..5.0), 0.0, rng.random_range(-5.0..5.0));
-            let at = open_ground(&col, &wp, center + off, center.y, 4.0).unwrap_or(center);
+            let off = Vec3::new(rng.random_range(-4.0..4.0), 0.0, rng.random_range(-4.0..4.0));
+            let at = if size == 1 { center } else { open_ground(&col, &wp, center + off, center.y, 4.0).unwrap_or(center) };
             spawn_mob(&mut commands, &server, wa, &mut images, db.as_deref(), def, at, Some(pack), false);
-        }
-    }
-    // Mini patronlar.
-    if sp.pending.is_empty() {
-        let mut placed = Vec::new();
-        for (k, (id, r)) in sp.bosses.iter().enumerate() {
-            let ang = rng.random_range(0.0..std::f32::consts::TAU);
-            let c = start + Vec3::new(ang.cos() * r, 0.0, ang.sin() * r);
-            if let Some(at) = open_ground(&col, &wp, c, ref_y, 30.0) {
-                spawn_mob(&mut commands, &server, wa, &mut images, db.as_deref(), mob(*id), at, None, false);
-                info!("mobs: patron {} @ {:.0} yd", mob(*id).name, at.distance(start));
-                placed.push(k);
-            }
-        }
-        for k in placed.into_iter().rev() {
-            sp.bosses.swap_remove(k);
         }
     }
 }

@@ -38,6 +38,9 @@ pub struct SaveData {
     /// Oyuncunun harita metresi konumu (Pyungmoo; Elwynn modunda `None`).
     #[serde(default)]
     pub pos_map: Option<[f32; 2]>,
+    /// Oyuncunun WoW dünya konumu (Elwynn / orijinal harita).
+    #[serde(default)]
+    pub pos_wow: Option<[f32; 3]>,
 }
 
 impl SaveData {
@@ -52,6 +55,7 @@ impl SaveData {
             inventory: inv.clone(),
             quest: quest.clone(),
             pos_map,
+            pos_wow: None,
         }
     }
 
@@ -235,6 +239,11 @@ pub fn saved_pos() -> Option<[f32; 2]> {
     loaded().and_then(|d| d.pos_map)
 }
 
+/// Kayıttaki WoW konumu (Elwynn; varsa ve sayıysa).
+pub fn saved_wow() -> Option<[f32; 3]> {
+    loaded().and_then(|d| d.pos_wow).filter(|p| p.iter().all(|v| v.is_finite()))
+}
+
 /// Yazma durumu.
 #[derive(Resource, Default)]
 struct SaveState {
@@ -268,16 +277,22 @@ fn load_into_world(mut commands: Commands) {
     }
 }
 
-fn player_pos(player: &Query<&Transform, With<Player>>) -> Option<[f32; 2]> {
-    let d = super::terrain::data()?;
-    let xf = player.single().ok()?;
-    let m = d.to_map(xf.translation);
-    Some([m.x, m.y])
+/// Oyuncunun konumu: (Pyungmoo harita metresi, WoW dünya koordinatı) — hangi harita açıksa.
+fn player_pos(player: &Query<&Transform, With<Player>>) -> (Option<[f32; 2]>, Option<[f32; 3]>) {
+    let Ok(xf) = player.single() else { return (None, None) };
+    match super::terrain::data() {
+        Some(d) => {
+            let m = d.to_map(xf.translation);
+            (Some([m.x, m.y]), None)
+        }
+        None => (None, Some(benilla_assets::coords::bevy_to_wow(xf.translation))),
+    }
 }
 
-fn write_now(stats: &PlayerStats, inv: &Inventory, quest: &Quest, pos: Option<[f32; 2]>) -> bool {
+fn write_now(stats: &PlayerStats, inv: &Inventory, quest: &Quest, pos: (Option<[f32; 2]>, Option<[f32; 3]>)) -> bool {
     let Some(path) = save_path() else { return false };
-    let data = SaveData::snapshot(stats, inv, quest, pos);
+    let mut data = SaveData::snapshot(stats, inv, quest, pos.0);
+    data.pos_wow = pos.1;
     let res = data.to_ron().map_err(|e| e.to_string()).and_then(|t| write_atomic(path, &t).map_err(|e| e.to_string()));
     match res {
         Ok(()) => {

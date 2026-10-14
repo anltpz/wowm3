@@ -171,20 +171,6 @@ pub struct MetinRune(pub Entity);
 
 const WAVES: [f32; 4] = [0.8, 0.6, 0.4, 0.2];
 
-/// Taş yuvaları: (metin türü, iç yarıçap, dış yarıçap).
-const SLOTS: &[(usize, f32, f32)] = &[
-    (0, 25.0, 60.0),
-    (0, 30.0, 80.0),
-    (0, 40.0, 90.0),
-    (1, 60.0, 110.0),
-    (1, 70.0, 130.0),
-    (2, 100.0, 160.0),
-    (2, 110.0, 170.0),
-    (3, 150.0, 210.0),
-    (3, 160.0, 220.0),
-    (4, 200.0, 260.0),
-];
-
 /// Pyungmoo metin yuvaları: (tür, -, -). Wiki metin haritasındaki bölgelere düşer.
 const PY_SLOTS: &[(usize, f32, f32)] = &[
     (0, 0.0, 0.0), (0, 0.0, 0.0), (0, 0.0, 0.0),
@@ -259,10 +245,9 @@ fn spawn_metins(
     }
     if !sp.init {
         sp.init = true;
-        let n = if super::terrain::data().is_some() { PY_SLOTS.len() } else { SLOTS.len() };
+        let n = if super::terrain::data().is_some() { PY_SLOTS.len() } else { super::elwynn::METIN_SLOTS.len() };
         sp.pending = (0..n).map(|i| (i, 0.0)).collect();
     }
-    let start = benilla_assets::coords::wow_to_bevy(super::start_wow());
     let mut rng = rand::rng();
     let dt = time.delta_secs();
     let mut placed = Vec::new();
@@ -272,21 +257,24 @@ fn spawn_metins(
         if *wait > 0.0 {
             continue;
         }
-        let (kind, rin, rout) = if td.is_some() { PY_SLOTS[*slot % PY_SLOTS.len()] } else { SLOTS[*slot] };
-        let at = if let Some(d) = td {
+        let (kind, at) = if let Some(d) = td {
+            let kind = PY_SLOTS[*slot % PY_SLOTS.len()].0;
             match py_metin_point(d, kind) {
-                Some(p) => p,
+                Some(p) => (kind, p),
                 None => continue,
             }
         } else {
+            // Elwynn: alan içinde rastgele açık nokta (alan henüz akmadıysa sonra tekrar).
+            let (kind, x, y, z, r) = super::elwynn::METIN_SLOTS[*slot];
             let ang = rng.random_range(0.0..std::f32::consts::TAU);
-            let r = rng.random_range(rin..rout);
-            let c = start + Vec3::new(ang.cos() * r, 0.0, ang.sin() * r);
-            let Some(at) = open_ground(&col, &wp, c, pxf.translation.y, 25.0) else {
+            let d = r * rng.random_range(0.0f32..1.0).sqrt();
+            let c = benilla_assets::coords::wow_to_bevy([x + ang.cos() * d, y + ang.sin() * d, z]);
+            let Some(at) = open_ground(&col, &wp, c, z, 60.0) else {
                 continue;
             };
-            at
+            (kind, at)
         };
+        let _ = &pxf;
         let def = &METINS[kind];
         let mut wm = WowModel::new(load_m2(
             &server,
@@ -388,7 +376,13 @@ fn metin_waves(
             m.wave += 1;
             let n = rng.random_range(3..=5);
             for _ in 0..n {
-                let k = m.def.summons[rng.random_range(0..m.def.summons.len())];
+                // Elwynn'de bölgenin WoW yaratıkları, Pyungmoo'da Metin2 canavarları.
+                let pool = if super::terrain::data().is_some() {
+                    m.def.summons
+                } else {
+                    super::elwynn::metin_summons(METINS.iter().position(|d| std::ptr::eq(d, m.def)).unwrap_or(0))
+                };
+                let k = pool[rng.random_range(0..pool.len())];
                 let ang = rng.random_range(0.0..std::f32::consts::TAU);
                 let off = Vec3::new(ang.cos() * 4.5, 0.0, ang.sin() * 4.5);
                 let at = open_ground(&col, &wp, xf.translation + off, xf.translation.y, 4.0)
