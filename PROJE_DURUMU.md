@@ -105,6 +105,7 @@ Metin2 tarzı aksiyon RPG; AzerothSurvivors'ın MPQ verisi (WoW 1.12 assetleri) 
   su düzlemi, 8 köprü (yürünebilir), 12 WMO köy binası (`model.rs` WowWmo), garnizon duvarı, zemin/su/yamaç/bina engeli.
 - Dünya akışı boş okyanusa (WoW −8000, 14000) odaklanır; benilla gökyüzü + ışık kalır, ADT yüklenmez.
 - `AZM_ELWYNN=1` eski Northshire modu; `AZM_MAPSTART=x,y` harita koordinatında başlangıç (test).
+- **Blender ile düzenleme** (`docs/BLENDER_HARITA.md`, `tools/blender_harita.py`): Pyungmoo Blender'a aktarılır, Sculpt/Texture Paint ile düzenlenip aynı 5 dosyaya geri yazılır; `AZM_MAPDIR=<klasör>` haritayı derlemeden o klasörden yükler (Pyungmoo modunu açar).
 - Canavarlar tr-wiki Pyungmoo listesinden (adlar/seviyeler birebir), düşürmeler WoW ikonlu Metin2 malzemeleri.
 
 ## Test

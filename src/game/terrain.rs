@@ -61,7 +61,34 @@ static DATA: OnceLock<TerrainData> = OnceLock::new();
 /// Pyungmoo modu açık mı. Varsayılan orijinal WoW haritası (Elwynn Forest, kullanıcı kararı);
 /// Metin2 Pyungmoo yeniden üretimi yalnızca `AZM_PYUNGMOO=1` ile.
 pub fn enabled() -> bool {
-    std::env::var("AZM_PYUNGMOO").is_ok_and(|v| v == "1")
+    std::env::var("AZM_PYUNGMOO").is_ok_and(|v| v == "1") || map_dir().is_some()
+}
+
+/// `AZM_MAPDIR=<klasör>`: harita verisi gömülü dosyalar yerine bu klasörden okunur (Blender'dan dışa aktarılan
+/// harita, `tools/blender_harita.py`; derlemeden dene). Pyungmoo modunu da açar. Eksik/bozuk dosya → gömülü olan.
+fn map_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("AZM_MAPDIR").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)
+}
+
+/// Harita dosyası: `AZM_MAPDIR` içinde varsa ve `ok` doğrulamasından geçerse oradan, yoksa gömülü kopya.
+fn map_file(name: &str, embedded: &'static [u8], ok: impl Fn(&[u8]) -> bool) -> std::borrow::Cow<'static, [u8]> {
+    if let Some(dir) = map_dir() {
+        let path = dir.join(name);
+        match std::fs::read(&path) {
+            Ok(b) if ok(&b) => {
+                info!("terrain: {} okundu ({} bayt)", path.display(), b.len());
+                return std::borrow::Cow::Owned(b);
+            }
+            Ok(_) => warn!("terrain: {} geçersiz (boyut/biçim), gömülü kullanılıyor", path.display()),
+            Err(e) => warn!("terrain: {} okunamadı ({e}), gömülü kullanılıyor", path.display()),
+        }
+    }
+    std::borrow::Cow::Borrowed(embedded)
+}
+
+/// PNG başlığı ve beklenen boyut (genişlik, yükseklik) doğru mu.
+fn png_is(b: &[u8], w: u32, h: u32) -> bool {
+    image::load_from_memory_with_format(b, image::ImageFormat::Png).is_ok_and(|i| i.width() == w && i.height() == h)
 }
 
 pub fn data() -> Option<&'static TerrainData> {
@@ -122,12 +149,13 @@ fn is_gate(p: Vec2, vertical: bool) -> bool {
 impl TerrainData {
     fn load() -> Self {
         let mut heights = Vec::with_capacity(GW * GH);
-        for c in HEIGHT.chunks_exact(4) {
+        let hb = map_file("height.bin", HEIGHT, |b| b.len() == GW * GH * 4);
+        for c in hb.chunks_exact(4) {
             heights.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
         }
-        let water = decode_png(WATER).to_luma8();
+        let water = decode_png(&map_file("water.png", WATER, |b| png_is(b, MAP_W as u32, MAP_H as u32))).to_luma8();
         let (water_w, water_h) = (water.width() as usize, water.height() as usize);
-        let mz = decode_png(METINZ).to_luma8();
+        let mz = decode_png(&map_file("metinzones.png", METINZ, |b| png_is(b, MAP_W as u32 / 4, MAP_H as u32 / 4))).to_luma8();
         let (zone_w, zone_h) = (mz.width() as usize, mz.height() as usize);
         let focus = benilla_assets::coords::wow_to_bevy(FOCUS_WOW);
         let origin = Vec3::new(focus.x - MAP_W / 2.0, 0.0, focus.z - MAP_H / 2.0);
@@ -418,7 +446,7 @@ fn build(
         return;
     };
     // Splat (doğrusal, kenarda kenetli).
-    let sp = decode_png(SPLAT).to_rgba8();
+    let sp = decode_png(&map_file("splat.png", SPLAT, |b| png_is(b, MAP_W as u32, MAP_H as u32))).to_rgba8();
     let mut splat = Image::new(
         Extent3d {
             width: sp.width(),
@@ -526,7 +554,8 @@ fn build(
     struct Trees {
         trees: Vec<(f32, f32, u8)>,
     }
-    let trees: Trees = serde_json::from_str(TREES).expect("trees.json");
+    let tree_src = map_file("trees.json", TREES.as_bytes(), |b| serde_json::from_slice::<Trees>(b).is_ok());
+    let trees: Trees = serde_json::from_slice(&tree_src).expect("trees.json");
     let leafy = [
         "World/Azeroth/Elwynn/PassiveDoodads/Trees/ElwynnTreeCanopy01.m2",
         "World/Azeroth/Elwynn/PassiveDoodads/Trees/ElwynnTreeCanopy02.m2",
