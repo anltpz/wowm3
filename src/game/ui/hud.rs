@@ -708,7 +708,7 @@ fn update_bars(
             // WoW mini harita şeridi: bulunulan alt bölge (Northshire Valley, Goldshire...).
             HudText::Zone => match (crate::game::terrain::data(), player.single()) {
                 (Some(_), _) => "Pyungmoo".to_string(),
-                (None, Ok(p)) => crate::game::elwynn::subzone(benilla_assets::coords::bevy_to_wow(p.translation)).to_string(),
+                (None, Ok(p)) => crate::game::zones::zone_name(benilla_assets::coords::bevy_to_wow(p.translation)).unwrap_or(crate::game::zones::DEFAULT_ZONE.name).to_string(),
                 (None, Err(_)) => "Elwynn Forest".to_string(),
             },
             HudText::Quest => quest.text(),

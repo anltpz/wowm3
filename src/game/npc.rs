@@ -86,7 +86,7 @@ pub struct Npc {
     pub name: &'static str,
     pub title: &'static str,
     pub kind: NpcKind,
-    /// `NPCS` tablosundaki satır.
+    /// Açık haritanın NPC zincirindeki düz satır (`npc_def(row)`).
     pub row: usize,
 }
 
@@ -580,13 +580,30 @@ pub const ELWYNN_NPCS: &[NpcDef] = &[
     },
 ];
 
-/// Açık haritaya göre NPC tablosu (Pyungmoo ya da orijinal WoW Elwynn).
-pub fn npc_table() -> &'static [NpcDef] {
+/// Orijinal WoW haritasında doğan NPC tabloları (WoW x/y/z). Yeni bölge/zindan NPC'leri kendi dosyasındaki
+/// tabloya eklenir; tablo burada bir satırla zincirlenir (`westfall::NPCS`, `dungeon::NPCS` zaten kayıtlı).
+pub const ELWYNN_NPC_TABLES: &[&[NpcDef]] = &[ELWYNN_NPCS, super::westfall::NPCS, super::dungeon::NPCS];
+
+/// Pyungmoo (`AZM_PYUNGMOO=1`) NPC tabloları (harita metresi).
+pub const PYUNGMOO_NPC_TABLES: &[&[NpcDef]] = &[NPCS];
+
+/// Açık haritaya göre NPC tablo zinciri (Pyungmoo ya da orijinal WoW).
+pub fn npc_tables() -> &'static [&'static [NpcDef]] {
     if super::terrain::data().is_some() {
-        NPCS
+        PYUNGMOO_NPC_TABLES
     } else {
-        ELWYNN_NPCS
+        ELWYNN_NPC_TABLES
     }
+}
+
+/// Açık haritanın bütün NPC'leri zincir sırasıyla; indeks = `Npc::row`.
+pub fn npc_defs() -> impl Iterator<Item = &'static NpcDef> {
+    npc_tables().iter().flat_map(|t| t.iter())
+}
+
+/// `Npc::row` satırının tanımı.
+pub fn npc_def(row: usize) -> Option<&'static NpcDef> {
+    npc_defs().nth(row)
 }
 
 /// Wiki koordinatı engelliyse en fazla bu kadar metre içinde açık nokta aranır.
@@ -677,7 +694,7 @@ fn spawn_npcs(
     let mut places: Vec<(usize, Vec3, Quat)> = Vec::new();
     match super::terrain::data() {
         Some(d) => {
-            for (i, n) in NPCS.iter().enumerate() {
+            for (i, n) in npc_defs().enumerate() {
                 let want = Vec2::new(n.map.0, n.map.1);
                 // Bina görselleri ayak izinden biraz büyük: çevresinde de NPC_CLEARANCE kadar boşluk iste.
                 let ok = |m: Vec2| {
@@ -708,7 +725,7 @@ fn spawn_npcs(
         }
         None => {
             // Orijinal WoW: tablodaki WoW konumları (z dahil); yakındaysa zemine oturtulur.
-            for (i, n) in ELWYNN_NPCS.iter().enumerate() {
+            for (i, n) in npc_defs().enumerate() {
                 let mut at = wow_to_bevy([n.map.0, n.map.1, n.z]);
                 if let Some(g) = super::physics::ground_at(&col, at).filter(|g| (g - at.y).abs() < 3.0) {
                     at.y = g;
@@ -721,7 +738,7 @@ fn spawn_npcs(
         }
     }
     for (i, at, rot) in &places {
-        let n = &npc_table()[*i];
+        let Some(n) = npc_def(*i) else { continue };
         let wm = build_body_as(&db, wa, &mut images, &server, &n.armor, &n.look);
         commands.spawn((
             wm,
@@ -775,7 +792,7 @@ fn talk(
     log: &mut GameLog,
     out: &mut MessageWriter<NpcTalked>,
 ) {
-    let line = match npc_table().get(npc.row) {
+    let line = match npc_def(npc.row) {
         Some(def) => greeting_line(def),
         None => format!("{}: {}", npc.name, npc.kind.greeting()),
     };
@@ -952,12 +969,12 @@ mod tests {
         world.init_resource::<GameLog>();
         world.init_resource::<Messages<NpcTalked>>();
         // Açık haritanın tablosu (testte arazi yok: orijinal WoW Elwynn): Demirci, Silah Satıcısı, Han Sahibi.
-        let t = npc_table();
+        let t: Vec<&NpcDef> = npc_defs().collect();
         let idx = |k: NpcKind| t.iter().position(|n| n.kind == k).unwrap();
         let rows: Vec<Entity> = [idx(NpcKind::Blacksmith), idx(NpcKind::WeaponMerchant), idx(NpcKind::Villager)]
             .iter()
             .map(|&i| {
-                let n = &t[i];
+                let n = t[i];
                 world.spawn(Npc { name: n.name, title: n.title, kind: n.kind, row: i }).id()
             })
             .collect();
@@ -1007,5 +1024,22 @@ mod elwynn_tests {
         for k in [NpcKind::Blacksmith, NpcKind::Merchant, NpcKind::WeaponMerchant, NpcKind::ArmorMerchant, NpcKind::Stable, NpcKind::Captain] {
             assert!(ELWYNN_NPCS.iter().any(|n| n.kind == k), "{k:?} yok");
         }
+    }
+
+    /// NPC zinciri: testte arazi yok → orijinal WoW tabloları; satır indeksi zincir sırasıyla.
+    #[test]
+    fn npc_chain_rows() {
+        assert_eq!(npc_tables().len(), ELWYNN_NPC_TABLES.len());
+        let all: Vec<&NpcDef> = npc_defs().collect();
+        assert_eq!(all.len(), ELWYNN_NPC_TABLES.iter().map(|t| t.len()).sum::<usize>());
+        // Elwynn tablosu zincirin başında: eski satır indeksleri değişmedi.
+        for (i, n) in ELWYNN_NPCS.iter().enumerate() {
+            assert_eq!((all[i].name, all[i].map), (n.name, n.map));
+        }
+        for (i, n) in all.iter().enumerate() {
+            let d = npc_def(i).unwrap();
+            assert_eq!((d.name, d.map), (n.name, n.map));
+        }
+        assert!(npc_def(all.len()).is_none());
     }
 }

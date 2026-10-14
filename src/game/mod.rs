@@ -7,11 +7,14 @@ pub mod character;
 pub mod combat;
 pub mod devshot;
 #[cfg(test)] mod display_audit;
+pub mod dungeon;
 pub mod elwynn;
+pub mod equipment;
 pub mod fx;
 pub mod gallery;
 pub mod inventory;
 pub mod items;
+pub mod items_metin2;
 pub mod log;
 pub mod loot;
 pub mod metin;
@@ -27,6 +30,8 @@ pub mod skills;
 pub mod stats;
 pub mod terrain;
 pub mod ui;
+pub mod westfall;
+pub mod zones;
 
 /// Oyunun başladığı nokta (WoW dünya koordinatı): WoW'daki insan başlangıcı, Northshire Manastırı önü.
 pub const START_WOW_DEFAULT: [f32; 3] = elwynn::HUMAN_START;
@@ -112,6 +117,8 @@ impl Plugin for GamePlugin {
             mount::plugin,
             fx::plugin,
         ))
+        // Sprint 5 içerik modülleri (taslaklar; kendi dosyalarında doldurulur, burası değişmez).
+        .add_plugins((equipment::plugin, westfall::plugin, dungeon::plugin))
         .init_resource::<inventory::Inventory>()
         .add_systems(Update, (snap_to_ground, mobs::heal_returning, npc::auto_close));
     }
