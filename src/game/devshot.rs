@@ -115,6 +115,8 @@ fn mob_gallery(
             at.y = g;
         }
         let e = super::mobs::spawn_mob(&mut commands, &server, wa, &mut images, Some(&db), super::mobs::mob(*id), at, None, false);
-        commands.entity(e).insert(Transform::from_translation(at).with_scale(Vec3::splat(super::mobs::mob(*id).scale)));
+        commands
+            .entity(e)
+            .insert((Transform::from_translation(at).with_scale(Vec3::splat(super::mobs::mob(*id).scale)), super::mobs::Passive));
     }
 }

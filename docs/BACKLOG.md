@@ -30,7 +30,7 @@ Pyungmoo sayfasında listeleniyor; tr-wiki'de yalnızca harita görselinde var).
 | Radar | Renkli noktalar (`hud.rs::radar`) | Gerçek minimap dokusu yok |
 | +artı parıltısı | `items::plus_glow` tanımlı ama **hiçbir yerde kullanılmıyor**; `player::Look.weapon_plus` izleniyor | Görsel yok |
 | Ses | **Yok.** `Cargo.toml` Bevy özelliklerinde `bevy_audio` / `wav` / `mp3` yok | MPQ'da 817 `Sound\` dosyası var |
-| Binek | Yok | MPQ'da **at modeli yok** (aşağıdaki karara bakın) |
+| Binek | **Var (Sprint 2, `mount.rs`)**: Ölümsüz Savaş Atı, Ctrl+G | Kullanıcı kararı: `RidingUndeadWarHorse` |
 | Tuşlar | I/Tab, H, Esc, Z/`, R, Space, 1-4, F1-F4, WASD/oklar | C, M, K, L, F5, Ctrl+G boş |
 
 ### Kod ile Metin2 arasındaki çelişkiler (karar gerekir)
@@ -39,8 +39,8 @@ Pyungmoo sayfasında listeleniyor; tr-wiki'de yalnızca harita görselinde var).
    kullanılsın (G-19).
 2. **At modeli:** MPQ'da `Creature\Horse\*.m2` yok, yalnızca at ayak sesleri var. Var olan binekler:
    `Creature\MountedDeathKnight\RidingUndeadWarHorse.m2` (ölümsüz savaş atı) ve `Creature\DireWolf\RidingDireWolf.m2`
-   (8 deri). Öneri: Metin2'deki "At" yerine `RidingDireWolf` kullanılsın (WoW hissine de uyar), ölümsüz at ise
-   ileri seviye binek olsun. Bu kararı kullanıcı onaylamalı (bkz. G-22 / D-18).
+   (8 deri). **KARAR (kullanıcı, 2026-10-14): `RidingUndeadWarHorse`** (deri `MountedDeathKnightBlack_01`,
+   CreatureDisplayInfo 10718). Uygulandı: G-22 / D-18 (Sprint 2).
 3. **`PROJE_DURUMU.md` metin taşı adları** eski ("Hüzün/Açgözlülük/Kara"). Kodda adlar doğru. Sprint kapanışında düzeltilecek.
 
 ---
@@ -506,16 +506,19 @@ Pyungmoo sayfasında listeleniyor; tr-wiki'de yalnızca harita görselinde var).
 
 ## E11 — Binek (at)
 
-### G-22 · Binek sistemi (Seyis) — gameplay-dev · P1
+### G-22 · Binek sistemi (Seyis) — gameplay-dev · P1 · **Sprint 2 — YAPILDI**
 - **Açıklama:** Seyis'ten Binicilik Bileti karşılığı 10 dakikalık "Midilli". Sv25'ten itibaren At Madalyonu ile
   kalıcı binek (Metin2 At seviyeleri sadeleştirilmiş: Genç / Asker / Usta). Binekteyken hareket hızı artar,
   saldırı yapılamaz (Metin2'de at üstü saldırı ileri seviyede). Tuş: Ctrl+G (Metin2) ya da H yerine yeni tuş.
 - **Kabul kriterleri:** Biletle binince 10 dk geri sayım HUD'da görünüyor, süre bitince iniliyor. Hız artışı birim testiyle ölçülüyor. Binek durumu kayda dahil.
 - **Dosyalar:** `mount.rs` (yeni), `player.rs` (hız), `npc.rs`
 - **Metin2 referansı:** tr-wiki Seyis (Binicilik Bileti → 10 dk Midilli, At Madalyonu Sv25)
-- **Karar:** MPQ'da at modeli yok (bkz. Bölüm 0). Önerilen model `RidingDireWolf`.
+- **Karar:** MPQ'da at modeli yok (bkz. Bölüm 0). Kullanıcı `RidingUndeadWarHorse`'u seçti.
+- **Uygulama (sadeleştirilmiş):** Seyis ile konuşunca Binicilik Bileti (10 dk) bedava verilir; Sv25+ oyuncuya At Madalyonu
+  (süresiz). Bilete sağ tık = bin + süre ekle, Ctrl+G = in/bin, hız ×1.6, saldırı/beceri denenince attan inilir,
+  süre `save.ron`'da (`PlayerStats.mount_left`, `riding`). Midilli→At seviyeleri (Genç/Asker/Usta) yok, sonraya.
 
-### D-18 · Binek görseli ve binme animasyonu — designer · P1 (G-22'ye bağlı)
+### D-18 · Binek görseli ve binme animasyonu — designer · P1 (G-22'ye bağlı) · **Sprint 2 — YAPILDI** (isim plakası yüksekliği hariç)
 - **Kabul kriterleri:** Oyuncu binek üstünde "Mount" animasyonuyla oturuyor, binek yürüme/koşma animasyonu
   hızla senkron. Ekran görüntüsü alınır. Binek simgesi HUD'da.
 - **WoW assetleri:** ✔ `Creature\DireWolf\RidingDireWolf.m2` + ✔ `RidingDireWolfSkinBrown.blp` (ve 7 deri daha),

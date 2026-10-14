@@ -90,6 +90,9 @@ fn orbit(
         if let Some(hit) = collision.cast_camera(target, back * cam.dist, false) {
             d = (hit - 0.2).max(1.0);
         }
+    } else if let Some(hit) = super::terrain::camera_hit(target, target + back * cam.dist) {
+        // Pyungmoo: köy binalarının içine girme (QA H2).
+        d = (hit - 0.3).max(1.0);
     }
     xf.translation = target + back * d;
     if let Some(g) = super::terrain::ground(xf.translation) {

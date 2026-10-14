@@ -25,6 +25,10 @@ pub struct PlayerStats {
     /// Öfke (berserk) bitiş zamanı, saniye.
     #[serde(skip)]
     pub rage_until: f32,
+    /// Binicilik Bileti'nden kalan binek süresi (sn). At Madalyonu varken azalmaz.
+    pub mount_left: f32,
+    /// Binek üstünde mi.
+    pub riding: bool,
 }
 
 impl Default for PlayerStats {
@@ -38,6 +42,8 @@ impl Default for PlayerStats {
             last_hurt: -100.0,
             dead: false,
             rage_until: -1.0,
+            mount_left: 0.0,
+            riding: false,
         }
     }
 }
@@ -110,6 +116,9 @@ pub fn derive(stats: &PlayerStats, inv: &Inventory) -> Derived {
             }
             _ => {}
         }
+    }
+    if stats.riding {
+        d.move_speed *= super::mount::SPEED_MUL;
     }
     d
 }

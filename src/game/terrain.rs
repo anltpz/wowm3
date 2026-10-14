@@ -46,7 +46,6 @@ pub struct TerrainData {
     pub zone_w: usize,
     pub zone_h: usize,
     bridges: Vec<Bridge>,
-    blockers: Vec<Blocker>,
 }
 
 #[derive(Clone, Copy)]
@@ -55,14 +54,6 @@ struct Bridge {
     b: Vec2,
     half_w: f32,
     deck: f32,
-}
-
-/// Bina ayak izi (yönlü kutu, harita metresi).
-#[derive(Clone, Copy)]
-struct Blocker {
-    c: Vec2,
-    half: Vec2,
-    yaw: f32,
 }
 
 static DATA: OnceLock<TerrainData> = OnceLock::new();
@@ -92,24 +83,40 @@ const BRIDGES: &[((f32, f32), (f32, f32), f32)] = &[
     ((276.0, 903.0), (306.0, 957.0), 3.0),
 ];
 
-/// Köy binaları: (x, y, yaw°, WMO yolu, ölçek, ayak izi yarı boyu x/y).
-pub const BUILDINGS: &[(f32, f32, f32, &str, f32, f32, f32)] = &[
-    (279.0, 640.0, 90.0, "World/wmo/Azeroth/Buildings/Human_Barracks/Human_Barracks.wmo", 0.55, 9.0, 11.0),
-    (284.0, 674.0, 90.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.55, 6.0, 5.0),
-    (305.0, 560.0, 0.0, "World/wmo/Azeroth/Buildings/Westfall_HumanTwoStory/Westfall_HumanTwoStory.wmo", 0.6, 7.0, 10.0),
-    (406.0, 573.0, 160.0, "World/wmo/Azeroth/Buildings/GoldshireInn/GoldshireInn.wmo", 0.45, 10.0, 8.0),
-    (443.0, 603.0, 200.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.6, 8.0, 6.0),
-    (459.0, 627.0, 270.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.5, 6.0, 6.0),
-    (459.0, 652.0, 270.0, "World/wmo/Azeroth/Buildings/Duskwood_HumanTwoStory/Duskwood_HumanTwoStory.wmo", 0.5, 6.0, 6.0),
-    (428.0, 680.0, 225.0, "World/wmo/Azeroth/Buildings/Stable/stable.wmo", 0.5, 7.0, 5.0),
-    (386.0, 706.0, 0.0, "World/wmo/Azeroth/Buildings/Duskwood_Blacksmith/Duskwood_Blacksmith.wmo", 0.55, 8.0, 5.0),
-    (346.0, 746.0, 0.0, "World/wmo/Azeroth/Buildings/GuardTower/GuardTower.wmo", 0.5, 4.0, 4.0),
-    (292.0, 808.0, 90.0, "World/wmo/Azeroth/Buildings/human_farm/farm.wmo", 0.5, 7.0, 6.0),
-    (296.0, 840.0, 90.0, "World/wmo/Azeroth/Buildings/Human_Barn_Silo/barn.wmo", 0.45, 7.0, 6.0),
+/// Köy binaları: (x, y, yaw°, WMO yolu, ölçek, ayak izi). Ayak izi modelin kendi (döndürülmüş, ölçekli)
+/// eksenlerinde kutu `[x0, x1, z0, z1]`: WMO iç mekân gruplarının sınırları + 0.3 m (MPQ'dan okundu;
+/// Demirci'de ocak/saçak dış grubu da dahil). Eski elle tahmin edilen kutular binalardan çok küçüktü (QA H1/H2).
+pub const BUILDINGS: &[(f32, f32, f32, &str, f32, [f32; 4])] = &[
+    (279.0, 640.0, 90.0, "World/wmo/Azeroth/Buildings/Human_Barracks/Human_Barracks.wmo", 0.55, [-16.9, 17.3, 3.7, 36.6]),
+    (284.0, 674.0, 90.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.55, [-10.4, 6.4, -11.5, 3.3]),
+    (305.0, 560.0, 0.0, "World/wmo/Azeroth/Buildings/Westfall_HumanTwoStory/Westfall_HumanTwoStory.wmo", 0.6, [-11.3, 6.9, -12.5, 3.6]),
+    (406.0, 573.0, 160.0, "World/wmo/Azeroth/Buildings/GoldshireInn/GoldshireInn.wmo", 0.45, [-7.3, 5.3, -9.5, 16.8]),
+    (443.0, 603.0, 200.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.6, [-11.3, 6.9, -12.5, 3.6]),
+    (459.0, 627.0, 270.0, "World/wmo/Azeroth/Buildings/HumanTwoStory/HumanTwoStory.wmo", 0.5, [-9.5, 5.8, -10.5, 3.1]),
+    (459.0, 652.0, 270.0, "World/wmo/Azeroth/Buildings/Duskwood_HumanTwoStory/Duskwood_HumanTwoStory.wmo", 0.5, [-9.5, 5.8, -10.5, 3.0]),
+    (428.0, 680.0, 225.0, "World/wmo/Azeroth/Buildings/Stable/stable.wmo", 0.5, [-5.7, 5.7, -5.7, 6.7]),
+    (386.0, 706.0, 0.0, "World/wmo/Azeroth/Buildings/Duskwood_Blacksmith/Duskwood_Blacksmith.wmo", 0.55, [-13.2, 8.0, -9.2, 15.5]),
+    (346.0, 746.0, 0.0, "World/wmo/Azeroth/Buildings/GuardTower/GuardTower.wmo", 0.5, [-7.3, 7.3, -7.6, 7.1]),
+    (292.0, 808.0, 90.0, "World/wmo/Azeroth/Buildings/human_farm/farm.wmo", 0.5, [-4.4, 3.3, -3.7, 3.5]),
+    (296.0, 840.0, 90.0, "World/wmo/Azeroth/Buildings/Human_Barn_Silo/barn.wmo", 0.45, [-6.2, 5.6, -4.4, 4.6]),
 ];
 
 /// Garnizon duvarı (dikdörtgen) ve meydan dekoru.
 const COMPOUND: (f32, f32, f32, f32) = (255.0, 612.0, 312.0, 695.0);
+/// Garnizon kapıları: batı duvarında y, doğu duvarında y (kışlanın güneyi), kuzey/güney duvarında x.
+const GATE_W_Y: f32 = 653.0;
+const GATE_E_Y: f32 = 662.0;
+const GATE_X: f32 = 283.0;
+
+/// Duvar çizgisindeki `p` noktası kapı boşluğunda mı (`vertical` = batı/doğu duvarı).
+fn is_gate(p: Vec2, vertical: bool) -> bool {
+    if vertical {
+        let gy = if (p.x - COMPOUND.2).abs() < (p.x - COMPOUND.0).abs() { GATE_E_Y } else { GATE_W_Y };
+        (p.y - gy).abs() < 5.0
+    } else {
+        (p.x - GATE_X).abs() < 5.0
+    }
+}
 
 impl TerrainData {
     fn load() -> Self {
@@ -133,20 +140,12 @@ impl TerrainData {
             zone_w,
             zone_h,
             bridges: Vec::new(),
-            blockers: Vec::new(),
         };
         for &((ax, ay), (bx, by), w) in BRIDGES {
             let a = Vec2::new(ax, ay);
             let b = Vec2::new(bx, by);
             let deck = d.raw_height(ax, ay).max(d.raw_height(bx, by)).max(0.4) + 0.35;
             d.bridges.push(Bridge { a, b, half_w: w, deck });
-        }
-        for &(x, y, yaw, _, _, hx, hy) in BUILDINGS {
-            d.blockers.push(Blocker {
-                c: Vec2::new(x, y),
-                half: Vec2::new(hx, hy),
-                yaw: yaw.to_radians(),
-            });
         }
         d
     }
@@ -234,23 +233,9 @@ impl TerrainData {
     }
 
     /// Bina ayak izinin içinde mi.
+    /// Bina ayak izi ya da garnizon duvarı.
     pub fn blocked(&self, m: Vec2) -> bool {
-        self.blockers.iter().any(|b| {
-            let d = m - b.c;
-            let (s, c) = b.yaw.sin_cos();
-            let local = Vec2::new(d.x * c - d.y * s, d.x * s + d.y * c);
-            local.x.abs() < b.half.x && local.y.abs() < b.half.y
-        }) || {
-            // Garnizon duvarı (kapı: batı ve doğu ortası).
-            let (x0, y0, x1, y1) = COMPOUND;
-            let near = |v: f32, w: f32| (v - w).abs() < 0.8;
-            let inside_x = m.x > x0 - 0.8 && m.x < x1 + 0.8;
-            let inside_y = m.y > y0 - 0.8 && m.y < y1 + 0.8;
-            let gate_y = (m.y - 653.0).abs() < 5.0;
-            let gate_x = (m.x - 283.0).abs() < 5.0;
-            ((near(m.x, x0) || near(m.x, x1)) && inside_y && !gate_y)
-                || ((near(m.y, y0) || near(m.y, y1)) && inside_x && !gate_x)
-        }
+        in_building(m, 0.0) || in_wall(m)
     }
 
     /// Metin bölgesi (0 yok, 1..5).
@@ -279,6 +264,54 @@ impl TerrainData {
             .iter()
             .all(|(dx, dy)| (self.raw_height(m.x + dx, m.y + dy) - h).abs() < 1.2)
     }
+}
+
+/// `m` bir binanın ayak izinde mi (`margin` metre büyütülmüş yönlü kutu, harita metresi).
+pub fn in_building(m: Vec2, margin: f32) -> bool {
+    BUILDINGS.iter().any(|&(x, y, yaw, _, _, [x0, x1, z0, z1])| {
+        // Harita farkını binanın kendi eksenlerine çevir (Transform::from_rotation_y'nin tersi).
+        let d = m - Vec2::new(x, y);
+        let (s, c) = yaw.to_radians().sin_cos();
+        let local = Vec2::new(d.x * c - d.y * s, d.x * s + d.y * c);
+        local.x > x0 - margin && local.x < x1 + margin && local.y > z0 - margin && local.y < z1 + margin
+    })
+}
+
+/// Garnizon duvarı (kapılar: batı/doğu ortası ve kuzey/güney ortası).
+pub fn in_wall(m: Vec2) -> bool {
+    let (x0, y0, x1, y1) = COMPOUND;
+    let near = |v: f32, w: f32| (v - w).abs() < 0.8;
+    let inside_x = m.x > x0 - 0.8 && m.x < x1 + 0.8;
+    let inside_y = m.y > y0 - 0.8 && m.y < y1 + 0.8;
+    ((near(m.x, x0) || near(m.x, x1)) && inside_y && !is_gate(m, true))
+        || ((near(m.y, y0) || near(m.y, y1)) && inside_x && !is_gate(m, false))
+}
+
+/// Kamerayı kesen bina çatısı (zeminden, metre). Ölçek 0.45-0.6 WMO'lar için bacasız üst sınır.
+pub const ROOF_H: f32 = 11.0;
+
+/// Kamera kolu `from` → `to` boyunca ilk bina girişine kadarki mesafe (Pyungmoo).
+/// Ayak izi görselden biraz küçük olduğu için 1 m pay bırakılır.
+pub fn camera_hit(from: Vec3, to: Vec3) -> Option<f32> {
+    let d = data()?;
+    let len = from.distance(to);
+    let dir = (to - from).normalize_or_zero();
+    let mut t = 0.5;
+    while t <= len {
+        let p = from + dir * t;
+        let m = d.to_map(p);
+        if in_building(m, 1.0) && p.y < d.ground_map(m.x, m.y) + ROOF_H {
+            return Some(t);
+        }
+        t += 0.25;
+    }
+    None
+}
+
+/// `from`'dan `to`'ya bakış bir binayla kesiliyor mu (isim plakaları, QA H4). Hedefin dibindeki
+/// 1.5 m sayılmaz (binanın önünde duran NPC).
+pub fn occluded(from: Vec3, to: Vec3) -> bool {
+    camera_hit(from, to).is_some_and(|t| t < from.distance(to) - 1.5)
 }
 
 /// Global sorgu: Pyungmoo zemin yüksekliği.
@@ -526,7 +559,7 @@ fn build(
         ));
     }
     // Köy binaları (WMO).
-    for (x, y, yaw, path, scale, _, _) in BUILDINGS {
+    for (x, y, yaw, path, scale, _) in BUILDINGS {
         let at = Vec3::new(d.origin.x + x, d.ground_map(*x, *y) - 0.15, d.origin.z + y);
         commands.spawn((
             WowWmo {
@@ -550,8 +583,8 @@ fn build(
         let yaw = -dir.y.atan2(dir.x);
         for k in 0..n {
             let p = a + dir * (k as f32 + 0.5) * (len / n as f32);
-            // Kapı boşlukları.
-            if ((p.y - 653.0).abs() < 5.0 && (dir.x.abs() < 0.1)) || ((p.x - 283.0).abs() < 5.0 && dir.y.abs() < 0.1) {
+            // Kapı boşlukları; binanın içinden geçen parçalar çizilmez.
+            if is_gate(p, dir.x.abs() < 0.1) || in_building(p, 0.0) {
                 continue;
             }
             let mut wm = WowModel::new(fence.clone());
@@ -570,4 +603,28 @@ fn build(
     seg(x1, y1, x0, y1);
     seg(x0, y1, x0, y0);
     info!("terrain: Pyungmoo {count} parça, {} ağaç, {} bina", trees.trees.len(), BUILDINGS.len());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn barracks_footprint_matches_visual() {
+        // Kuşbakışı görüntüde kışla garnizonun kuzeydoğusunda (≈ x 283–315, y 623–657).
+        assert!(in_building(Vec2::new(300.0, 640.0), 0.0));
+        assert!(in_building(Vec2::new(286.0, 630.0), 0.0));
+        // WMO kökü (279, 640) binanın batı dışında, avlu (300, 663) açık.
+        assert!(!in_building(Vec2::new(279.0, 640.0), 0.0));
+        assert!(!in_building(Vec2::new(300.0, 663.0), 0.0));
+    }
+
+    #[test]
+    fn east_gate_is_south_of_barracks() {
+        let gate = Vec2::new(COMPOUND.2, GATE_E_Y);
+        assert!(!in_wall(gate) && !in_building(gate, 0.0));
+        assert!(in_wall(Vec2::new(COMPOUND.2, 675.0)));
+        assert!(!in_wall(Vec2::new(COMPOUND.0, GATE_W_Y)));
+        assert!(!in_wall(Vec2::new(GATE_X, COMPOUND.1)));
+    }
 }

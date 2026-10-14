@@ -47,6 +47,7 @@ pub fn item_color(it: &Item) -> Color {
         Kind::Blessing | Kind::Handbook | Kind::DragonScale => Color::srgb(1.0, 0.8, 0.3),
         Kind::Material => Color::srgb(0.7, 1.0, 0.7),
         Kind::Potion { .. } => Color::srgb(1.0, 0.6, 0.6),
+        Kind::MountTicket { .. } | Kind::MountMedal => Color::srgb(0.6, 0.9, 1.0),
     }
 }
 

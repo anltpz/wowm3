@@ -78,6 +78,10 @@ pub enum Kind {
     Handbook,
     /// Ejderha Pulu (nadir): +%20 başarı ve koruma.
     DragonScale,
+    /// Binicilik Bileti: kullanınca `secs` saniyelik binek süresi (Seyis verir).
+    MountTicket { secs: u32 },
+    /// At Madalyonu: süresiz binek (Sv25).
+    MountMedal,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -232,6 +236,8 @@ pub const V_SOUL_CRYSTAL: u32 = 30011;
 pub const V_BLESSING: u32 = 25040;
 pub const V_HANDBOOK: u32 = 25041;
 pub const V_DRAGON_SCALE: u32 = 25042;
+pub const V_RIDE_TICKET: u32 = 50050;
+pub const V_HORSE_MEDAL: u32 = 50051;
 
 pub const ITEMS: &[ItemDef] = &[
     // --- Kılıçlar (Metin2 savaşçı, Pyungmoo düşürmeleri) ---
@@ -295,6 +301,18 @@ pub const ITEMS: &[ItemDef] = &[
     misc(V_BLESSING, "Kutsama Kağıdı", "INV_Scroll_03", Kind::Blessing, 200, 500),
     misc(V_HANDBOOK, "Demircinin El Kitabı", "INV_Misc_Book_09", Kind::Handbook, 200, 800),
     misc(V_DRAGON_SCALE, "Ejderha Pulu", "INV_Misc_MonsterScales_13", Kind::DragonScale, 200, 3000),
+    // --- Binek (Seyis) ---
+    misc(V_RIDE_TICKET, "Binicilik Bileti", "INV_Misc_Ticket_Darkmoon_01", Kind::MountTicket { secs: 600 }, 20, 0),
+    ItemDef {
+        vnum: V_HORSE_MEDAL,
+        name: "At Madalyonu",
+        icon: "Ability_Mount_Undeadhorse",
+        kind: Kind::MountMedal,
+        level: 25,
+        height: 1,
+        stack: 1,
+        price: 0,
+    },
 ];
 
 /// Seviyeye uygun rastgele ekipman havuzu (canavar düşürmeleri için).

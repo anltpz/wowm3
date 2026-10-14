@@ -69,7 +69,7 @@ impl NpcKind {
             NpcKind::WeaponMerchant => "Keskin bir kılıç, canavarlara karşı en sadık dostundur.",
             NpcKind::ArmorMerchant => "Sağlam bir zırh olmadan köyden çıkma derim.",
             NpcKind::Warehouse => "Eşyalarını bana emanet edebilirsin, depon her köyde seni bekler.",
-            NpcKind::Stable => "Atlar ahırda dinleniyor. Biraz güçlenince sana da bir at bulurum.",
+            NpcKind::Stable => "Ahırda bir Ölümsüz Savaş Atı var. Bileti al, Pyungmoo'yu rüzgâr gibi dolaş!",
             NpcKind::FortuneTeller => "Gel evladım, kader taşları bugün sana ne söyleyecek bakalım.",
             NpcKind::Guard => "Köyün dışında Metin taşları düşmeye devam ediyor, dikkatli ol!",
             NpcKind::Teleporter => "Uzak diyarlara gitmek mi istiyorsun? Yolu açarım, yeter ki hazır ol.",
@@ -234,7 +234,7 @@ pub const NPCS: &[NpcDef] = &[
         armor: GROOM,
         tool: Some(PITCHFORK),
         look: M_BLOND,
-        greet: "Atlar ahırda dinleniyor. Biraz daha güçlenince sana da bir at bulurum.",
+        greet: "Ahırda bir Ölümsüz Savaş Atı var. Bileti al, Pyungmoo'yu rüzgâr gibi dolaş!",
     },
     NpcDef {
         name: "Yaşlı Kadın",
@@ -284,8 +284,9 @@ pub const NPCS: &[NpcDef] = &[
         name: "Yüzbaşı",
         title: "Garnizon",
         kind: NpcKind::Captain,
-        map: (286.0, 639.0),
-        face: (300.0, 653.0),
+        // Wiki koordinatı (286, 639) kışlanın içinde kalıyor (QA H1): kışlanın güneyindeki avluda, doğu kapısına bakar.
+        map: (300.0, 663.0),
+        face: (312.0, 662.0),
         armor: CAPTAIN,
         tool: Some(SILVER_SWORD),
         look: M_BROWN,
@@ -554,16 +555,8 @@ fn attach_tools(
 /// NPC türüne göre pencereleri aç.
 fn open(w: &mut Windows, kind: NpcKind) {
     match kind {
-        NpcKind::Blacksmith => {
-            w.inventory = true;
-            w.upgrade = true;
-            w.shop = false;
-        }
-        k if k.is_shop() => {
-            w.inventory = true;
-            w.shop = true;
-            w.upgrade = false;
-        }
+        NpcKind::Blacksmith => w.open_upgrade(),
+        k if k.is_shop() => w.open_shop(),
         _ => {}
     }
 }
@@ -581,7 +574,7 @@ fn talk(
         Some(def) => greeting_line(def),
         None => format!("{}: {}", npc.name, npc.kind.greeting()),
     };
-    log.push(now, C_NPC, line);
+    log.say(now, C_NPC, line);
     out.write(NpcTalked { entity, kind: npc.kind });
     open(w, npc.kind);
 }
@@ -743,6 +736,25 @@ mod tests {
         assert!(NpcKind::ArmorMerchant.is_shop());
         assert!(!NpcKind::Blacksmith.is_shop());
         assert!(!NpcKind::Fisherman.is_shop());
+    }
+
+    /// Her NPC'nin (kaydırma payı içinde) bina ve duvardan uzak bir yeri var (QA H1).
+    #[test]
+    fn every_npc_has_open_spot() {
+        use crate::game::terrain::{in_building, in_wall};
+        let free = |m: Vec2| {
+            !(in_building(m, 0.0) || in_wall(m))
+                && (0..8).all(|k| {
+                    let a = k as f32 * std::f32::consts::FRAC_PI_4;
+                    let q = m + Vec2::new(a.cos(), a.sin()) * NPC_CLEARANCE;
+                    !(in_building(q, 0.0) || in_wall(q))
+                })
+        };
+        for n in NPCS {
+            assert!(nudge(Vec2::new(n.map.0, n.map.1), NUDGE_MAX, free).is_some(), "{} binanın içinde", n.name);
+        }
+        let cap = NPCS.iter().find(|n| n.kind == NpcKind::Captain).unwrap();
+        assert!(free(Vec2::new(cap.map.0, cap.map.1)), "Yüzbaşı kaydırmasız açık noktada olmalı");
     }
 
     #[test]

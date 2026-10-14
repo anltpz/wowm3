@@ -122,6 +122,14 @@ pub fn lines(it: &Item, my_level: u32) -> Vec<(String, Color, f32)> {
             Color::srgb(1.0, 0.6, 0.3),
             12.0,
         )),
+        Kind::MountTicket { secs } => {
+            v.push((format!("{} dakika Ölümsüz Savaş Atı", secs / 60), Color::srgb(0.6, 0.9, 1.0), 13.0));
+            v.push(("Sağ tık: bin (süre eklenir). Ctrl+G: in / bin".into(), TEXT_DIM, 11.0));
+        }
+        Kind::MountMedal => {
+            v.push(("Süresiz Ölümsüz Savaş Atı".into(), Color::srgb(0.6, 0.9, 1.0), 13.0));
+            v.push(("Sağ tık ya da Ctrl+G: in / bin".into(), TEXT_DIM, 11.0));
+        }
     }
     if d.level > 1 {
         let ok = my_level >= d.level;

@@ -7,6 +7,8 @@ pub struct LogLine {
     pub text: String,
     pub color: Color,
     pub at: f32,
+    /// Sistem mesajı mı ("[Sistem]" önekiyle çizilir); NPC konuşmaları değil.
+    pub system: bool,
 }
 
 #[derive(Resource, Default)]
@@ -25,11 +27,14 @@ pub const C_EXP: Color = Color::srgb(0.75, 0.6, 1.0);
 
 impl GameLog {
     pub fn push(&mut self, now: f32, color: Color, text: impl Into<String>) {
-        self.lines.push(LogLine {
-            text: text.into(),
-            color,
-            at: now,
-        });
+        self.add(now, color, text.into(), true);
+    }
+    /// Konuşma satırı ("<Ad>: <metin>", önek yok).
+    pub fn say(&mut self, now: f32, color: Color, text: impl Into<String>) {
+        self.add(now, color, text.into(), false);
+    }
+    fn add(&mut self, now: f32, color: Color, text: String, system: bool) {
+        self.lines.push(LogLine { text, color, at: now, system });
         if self.lines.len() > 60 {
             self.lines.remove(0);
         }

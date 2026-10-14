@@ -15,6 +15,7 @@ pub mod metin;
 pub mod mobs;
 pub mod npc;
 pub mod model;
+pub mod mount;
 pub mod physics;
 pub mod player;
 pub mod quest;
@@ -98,6 +99,7 @@ impl Plugin for GamePlugin {
             skills::plugin,
             quest::plugin,
             save::plugin,
+            mount::plugin,
         ))
         .init_resource::<inventory::Inventory>()
         .add_systems(Update, (snap_to_ground, mobs::heal_returning, npc::auto_close));
