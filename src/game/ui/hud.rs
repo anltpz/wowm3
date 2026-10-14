@@ -60,6 +60,7 @@ enum HudText {
     Zone,
     Quest,
     RageTime,
+    MountTime,
 }
 
 #[derive(Resource)]
@@ -93,6 +94,8 @@ struct Radar;
 struct RadarDots;
 #[derive(Component)]
 struct RageBuff;
+#[derive(Component)]
+struct MountBuff;
 
 /// İksir slotu düğümü (sürükle-bırak hedefi).
 #[derive(Component)]
@@ -255,6 +258,7 @@ fn build(
     let bag = ic("Interface\\Icons\\INV_Misc_Bag_08.blp");
     let book = ic("Interface\\Icons\\INV_Misc_Book_09.blp");
     let rage = ic("Interface\\Icons\\Ability_Racial_BloodRage.blp");
+    let steed = ic("Interface\\Icons\\Ability_Mount_Undeadhorse.blp");
 
     // ===== Alt çubuk =====
     commands
@@ -313,6 +317,19 @@ fn build(
                             text(&ui, "", 11.0, TEXT),
                             TextShadow::default(),
                             HudText::RageTime,
+                        ));
+                        r.spawn((
+                            Node { width: px(28), height: px(28), border: UiRect::all(px(1)), ..default() },
+                            ImageNode::new(steed),
+                            BorderColor::all(Color::srgb(0.45, 0.75, 1.0)),
+                            Visibility::Hidden,
+                            MountBuff,
+                        ))
+                        .with_child((
+                            Node { position_type: PositionType::Absolute, bottom: px(-2), right: px(1), ..default() },
+                            text(&ui, "", 11.0, TEXT),
+                            TextShadow::default(),
+                            HudText::MountTime,
                         ));
                         r.spawn((Node { flex_grow: 1.0, ..default() },));
                         r.spawn((text(&ui, "", 13.0, GOLD), HudText::Yang));
@@ -741,7 +758,8 @@ fn update_bars(
     mut hp: Query<&mut Node, (With<FrameHpFill>, Without<FrameSpFill>, Without<ExpFill>)>,
     mut sp: Query<&mut Node, (With<FrameSpFill>, Without<FrameHpFill>, Without<ExpFill>)>,
     mut exp: Query<&mut Node, (With<ExpFill>, Without<FrameHpFill>, Without<FrameSpFill>)>,
-    mut rage: Query<&mut Visibility, With<RageBuff>>,
+    mut rage: Query<&mut Visibility, (With<RageBuff>, Without<MountBuff>)>,
+    mut steed: Query<&mut Visibility, (With<MountBuff>, Without<RageBuff>)>,
 ) {
     let now = time.elapsed_secs();
     let hpf = (stats.hp.max(0) as f32 / d.max_hp.max(1) as f32).clamp(0.0, 1.0);
@@ -760,6 +778,9 @@ fn update_bars(
     if let Ok(mut v) = rage.single_mut() {
         *v = if raging { Visibility::Inherited } else { Visibility::Hidden };
     }
+    if let Ok(mut v) = steed.single_mut() {
+        *v = if stats.riding { Visibility::Inherited } else { Visibility::Hidden };
+    }
     for (t, mut s) in &mut texts {
         let v = match t {
             HudText::HpOrb => format!("{}\n/{}", stats.hp.max(0), d.max_hp),
@@ -773,6 +794,15 @@ fn update_bars(
             HudText::Quest => quest.text(),
             HudText::RageTime => {
                 if raging { format!("{:.0}", stats.rage_until - now) } else { String::new() }
+            }
+            HudText::MountTime => {
+                if !stats.riding {
+                    String::new()
+                } else if crate::game::mount::has_medal(&stats, &inv) {
+                    "∞".to_string()
+                } else {
+                    crate::game::mount::clock(stats.mount_left)
+                }
             }
             _ => continue,
         };

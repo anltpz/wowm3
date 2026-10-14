@@ -690,6 +690,7 @@ fn use_items(
     d: Res<Derived>,
     mut log: ResMut<GameLog>,
     mut cd: Local<f32>,
+    mut mount: MessageWriter<crate::game::mount::MountRequest>,
 ) {
     let now = time.elapsed_secs();
     for UseItem(cell) in ev.read() {
@@ -719,6 +720,9 @@ fn use_items(
             }
             Kind::Material => {
                 log.push(now, C_INFO, "Yükseltme malzemesi. Demirci'ye götür.");
+            }
+            Kind::MountTicket { .. } | Kind::MountMedal => {
+                mount.write(crate::game::mount::MountRequest::UseItem(it.vnum));
             }
         }
     }

@@ -69,7 +69,7 @@ impl NpcKind {
             NpcKind::WeaponMerchant => "Keskin bir kılıç, canavarlara karşı en sadık dostundur.",
             NpcKind::ArmorMerchant => "Sağlam bir zırh olmadan köyden çıkma derim.",
             NpcKind::Warehouse => "Eşyalarını bana emanet edebilirsin, depon her köyde seni bekler.",
-            NpcKind::Stable => "Atlar ahırda dinleniyor. Biraz güçlenince sana da bir at bulurum.",
+            NpcKind::Stable => "Ahırda bir Ölümsüz Savaş Atı var. Bileti al, Pyungmoo'yu rüzgâr gibi dolaş!",
             NpcKind::FortuneTeller => "Gel evladım, kader taşları bugün sana ne söyleyecek bakalım.",
             NpcKind::Guard => "Köyün dışında Metin taşları düşmeye devam ediyor, dikkatli ol!",
             NpcKind::Teleporter => "Uzak diyarlara gitmek mi istiyorsun? Yolu açarım, yeter ki hazır ol.",
@@ -234,7 +234,7 @@ pub const NPCS: &[NpcDef] = &[
         armor: GROOM,
         tool: Some(PITCHFORK),
         look: M_BLOND,
-        greet: "Atlar ahırda dinleniyor. Biraz daha güçlenince sana da bir at bulurum.",
+        greet: "Ahırda bir Ölümsüz Savaş Atı var. Bileti al, Pyungmoo'yu rüzgâr gibi dolaş!",
     },
     NpcDef {
         name: "Yaşlı Kadın",

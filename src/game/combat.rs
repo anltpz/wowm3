@@ -232,7 +232,8 @@ fn attack_input(
     let Ok(mut pxf) = player.single_mut() else {
         return;
     };
-    if stats.dead {
+    // Binekteyken saldırı yok (mount::dismount_on_attack attan indirir).
+    if stats.dead || stats.riding {
         swing.hit_at = None;
         return;
     }

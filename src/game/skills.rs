@@ -193,7 +193,7 @@ fn cast(
     let now = time.elapsed_secs();
     for CastSkill(i) in ev.read() {
         let def = &SKILLS[*i];
-        if stats.dead || active.skill.is_some() {
+        if stats.dead || stats.riding || active.skill.is_some() {
             continue;
         }
         if stats.level < def.level {

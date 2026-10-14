@@ -282,7 +282,9 @@ fn animate_player(
     if stats.dead {
         return;
     }
-    let idle = if p.moving {
+    let idle = if stats.riding {
+        anim::MOUNT
+    } else if p.moving {
         anim::RUN
     } else if look.weapon.is_some() {
         if look.two_hand { anim::READY_2H } else { anim::READY_1H }
