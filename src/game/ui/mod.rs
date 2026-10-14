@@ -55,8 +55,6 @@ pub const PANEL_BG: Color = Color::srgba(0.07, 0.055, 0.04, 0.93);
 pub const PANEL_BORDER: Color = Color::srgb(0.62, 0.48, 0.24);
 #[allow(dead_code)]
 pub const TITLE_BG: Color = Color::srgba(0.18, 0.12, 0.06, 0.98);
-pub const SLOT_BG: Color = Color::srgba(0.015, 0.015, 0.015, 0.9);
-pub const SLOT_BORDER: Color = Color::srgb(0.32, 0.26, 0.16);
 #[allow(dead_code)]
 pub const SLOT_HOVER: Color = Color::srgb(0.85, 0.7, 0.3);
 pub const TEXT: Color = Color::srgb(0.93, 0.9, 0.82);

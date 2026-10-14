@@ -1,18 +1,17 @@
-//! Ana HUD (Metin2/WoW karışımı tasarım):
-//! - Altta: solda kırmızı HP küresi, sağda mavi SP küresi (prosedürel kürelər + grifon süsleri),
-//!   ortada taş çubuk: üstte etkin güçlendirmeler, altta 1-4 beceri + F1-F4 iksir slotları,
-//!   menü düğmeleri ve ince EXP çubuğu.
-//! - Sol üstte portre + ad/seviye + HP/SP; üst ortada hedef çubuğu; sağ üstte radar, bölge adı
-//!   ve görev takibi; sol altta sohbet/sistem kutusu; ortada duyuru; ölüm ve yardım katmanları.
+//! Ana HUD — WoW 1.12 arayüz dokularıyla (MPQ Interface/), kendi çizimimiz yok denecek kadar az:
+//! - Altta: WoW MainMenuBar şeritleri (12 slot: 1-4 beceri, F1-F4 iksir, çanta, yardım), üstünde
+//!   UI-StatusBar EXP çubuğu; iki yanda HP/SP küreleri (TempPortraitAlphaMask diski + MiniMap-TrackingBorder
+//!   altın halkası, alttan dolar) ve grifon uç kapakları.
+//! - Sol üstte WoW PlayerFrame (UI-TargetingFrame, aynalanmış), üstte TargetFrame (NoMana / Elite),
+//!   sağ üstte WoW mini harita çerçevesi (UI-Minimap-Border, ObjectIcons, MinimapArrow) + görev,
+//!   sol altta sohbet kutusu, ortada duyuru; ölüm ve yardım katmanları.
 
-use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::RelativeCursorPosition;
 
 use benilla_assets::WorldAssets;
 
-use super::{icon, text, thousands, BlocksWorld, UiAssets, Windows, GOLD, SLOT_BG, SLOT_BORDER, TEXT, TEXT_DIM};
+use super::{icon, text, thousands, BlocksWorld, UiAssets, Windows, GOLD, TEXT, TEXT_DIM};
 use crate::game::camera::OrbitCam;
 use crate::game::combat::{Dying, Enemy, Health, PlayerTarget};
 use crate::game::inventory::Inventory;
@@ -43,8 +42,15 @@ impl Default for QuickSlots {
 pub const QUICK_KEYS: [KeyCode; 4] = [KeyCode::F1, KeyCode::F2, KeyCode::F3, KeyCode::F4];
 const QUICK_LABELS: [&str; 4] = ["F1", "F2", "F3", "F4"];
 
-const ORB: u32 = 128;
-const ORB_PX: f32 = 118.0;
+/// Küre çapı (piksel).
+const ORB_PX: f32 = 112.0;
+/// Ana çubuk (2 şerit × 256) genişliği ve alt çubuk kabının genişliği.
+const BAR_W: f32 = 512.0;
+const HUD_W: f32 = 920.0;
+/// Şeritlerin kap içindeki sol kenarı.
+const BAR_X: f32 = (HUD_W - BAR_W) / 2.0;
+/// WoW eylem slotu: 36 px, şeritte x = 8 + 42·i.
+const SLOT: f32 = 36.0;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 enum HudText {
@@ -57,18 +63,23 @@ enum HudText {
     Yang,
     TargetName,
     TargetHp,
+    TargetLevel,
+    FrameLevel,
     Zone,
     Quest,
     RageTime,
     MountTime,
 }
 
+/// HUD kuruldu (güncelleme sistemleri bundan sonra çalışır).
 #[derive(Resource)]
-struct OrbImages {
-    hp: Handle<Image>,
-    sp: Handle<Image>,
-    last: (f32, f32),
-}
+struct HudBuilt;
+
+/// Kürenin dolu kısmı (yüksekliği yüzde ile değişir); `true` HP, `false` SP.
+#[derive(Component)]
+struct OrbFill(bool);
+#[derive(Component)]
+struct PlayerArrow;
 
 #[derive(Component)]
 struct FrameHpFill;
@@ -123,7 +134,6 @@ pub fn plugin(app: &mut App) {
         (
             build.run_if(resource_exists::<UiAssets>.and(resource_exists::<WorldAssets>)),
             (
-                update_orbs,
                 update_bars,
                 update_target,
                 update_log,
@@ -134,100 +144,33 @@ pub fn plugin(app: &mut App) {
                 radar,
                 overlays,
             )
-                .run_if(resource_exists::<OrbImages>),
+                .run_if(resource_exists::<HudBuilt>),
         ),
     );
 }
 
-// ---------- prosedürel küre ----------
-
-fn orb_pixels(frac: f32, base: [f32; 3], t: f32) -> Vec<u8> {
-    let n = ORB as usize;
-    let mut px = vec![0u8; n * n * 4];
-    let inner = 0.84;
-    for y in 0..n {
-        for x in 0..n {
-            let fx = (x as f32 + 0.5) / n as f32 * 2.0 - 1.0;
-            let fy = (y as f32 + 0.5) / n as f32 * 2.0 - 1.0;
-            let r = (fx * fx + fy * fy).sqrt();
-            let i = (y * n + x) * 4;
-            if r > 1.0 {
-                continue;
-            }
-            let mut c;
-            let mut a = 1.0f32;
-            if r > inner {
-                // Metal halka: altın-bronz, kabartmalı.
-                let k = (r - inner) / (1.0 - inner);
-                let bevel = 1.0 - (k * 2.0 - 1.0).abs();
-                let light = 0.5 + 0.5 * (-fx * 0.6 - fy * 0.8);
-                let g = 0.25 + 0.55 * bevel * light;
-                c = [g * 1.05, g * 0.82, g * 0.45];
-                if r > 0.985 {
-                    a = (1.0 - r) / 0.015;
-                }
-            } else {
-                let lvl = 1.0 - (fy + inner) / (2.0 * inner); // 0 altta, 1 üstte
-                let wave = (fx * 9.0 + t * 2.5).sin() * 0.012;
-                let rr = r / inner;
-                let shade = (1.0 - rr * rr).max(0.0).sqrt();
-                if lvl < frac + wave {
-                    let depth = 0.45 + 0.55 * lvl.min(frac) / frac.max(0.05);
-                    let k = (0.25 + 0.75 * shade) * (0.6 + 0.4 * depth);
-                    c = [base[0] * k, base[1] * k, base[2] * k];
-                    // Yüzey çizgisi parlak.
-                    if (lvl - frac - wave).abs() < 0.018 && frac < 0.995 {
-                        c = [c[0] + 0.25, c[1] + 0.2, c[2] + 0.2];
-                    }
-                } else {
-                    let k = 0.05 + 0.08 * shade;
-                    c = [k + base[0] * 0.04, k * 0.9 + base[1] * 0.04, k * 0.9 + base[2] * 0.04];
-                }
-                // Cam parlaması.
-                let hl = (-((fx + 0.32).powi(2) / 0.05 + (fy + 0.42).powi(2) / 0.018)).exp() * 0.55;
-                let rim = rr.powi(8) * 0.25;
-                c = [c[0] + hl + rim * 0.3, c[1] + hl + rim * 0.3, c[2] + hl + rim * 0.35];
-            }
-            px[i] = (c[0].clamp(0.0, 1.0) * 255.0) as u8;
-            px[i + 1] = (c[1].clamp(0.0, 1.0) * 255.0) as u8;
-            px[i + 2] = (c[2].clamp(0.0, 1.0) * 255.0) as u8;
-            px[i + 3] = (a.clamp(0.0, 1.0) * 255.0) as u8;
-        }
-    }
-    px
-}
-
-const HP_COL: [f32; 3] = [0.95, 0.08, 0.05];
-const SP_COL: [f32; 3] = [0.1, 0.3, 1.0];
-
-fn orb_image(frac: f32, base: [f32; 3]) -> Image {
-    Image::new(
-        Extent3d {
-            width: ORB,
-            height: ORB,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        orb_pixels(frac, base, 0.0),
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    )
-}
-
 // ---------- kurulum ----------
 
-fn slot_box(size: f32) -> impl Bundle {
+/// WoW eylem slotu (şerit sanatının üstüne, arka plan çizmeden).
+fn slot_node(x: f32) -> impl Bundle {
     (
         Node {
-            width: px(size),
-            height: px(size),
-            border: UiRect::all(px(1)),
+            position_type: PositionType::Absolute,
+            left: px(BAR_X + x),
+            bottom: px(4),
+            width: px(SLOT),
+            height: px(SLOT),
             ..default()
         },
-        BackgroundColor(SLOT_BG),
-        BorderColor::all(Color::srgb(0.45, 0.36, 0.2)),
         RelativeCursorPosition::default(),
+        ZIndex(3),
     )
+}
+
+/// i. slotun x konumu (0..12, iki şerit).
+fn slot_x(i: usize) -> f32 {
+    let (strip, k) = (i / 6, i % 6);
+    strip as f32 * 256.0 + 8.0 + 42.0 * k as f32
 }
 
 fn build(
@@ -241,16 +184,19 @@ fn build(
         return;
     }
     *done = true;
-    let hp_img = images.add(orb_image(1.0, HP_COL));
-    let sp_img = images.add(orb_image(1.0, SP_COL));
-    commands.insert_resource(OrbImages {
-        hp: hp_img.clone(),
-        sp: sp_img.clone(),
-        last: (-1.0, -1.0),
-    });
+    commands.insert_resource(HudBuilt);
     let mut ic = |p: &str| icon(&mut wa, &mut images, p).unwrap_or_default();
     let endcap = ic("Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Human.blp");
+    let bar = ic("Interface\\MainMenuBar\\UI-MainMenuBar-Human.blp");
+    let status = ic("Interface\\TargetingFrame\\UI-StatusBar.blp");
+    let mask = ic("Interface\\CharacterFrame\\TempPortraitAlphaMask.blp");
+    let ring = ic("Interface\\Minimap\\MiniMap-TrackingBorder.blp");
+    let frame = ic("Interface\\TargetingFrame\\UI-TargetingFrame.blp");
+    let target_nomana = ic("Interface\\TargetingFrame\\UI-TargetingFrame-NoMana.blp");
     let portrait = ic("Interface\\CharacterFrame\\TemporaryPortrait-Male-Human.blp");
+    let monster = ic("Interface\\CharacterFrame\\TemporaryPortrait-Monster.blp");
+    let mm_border = ic("Interface\\Minimap\\UI-Minimap-Border.blp");
+    let arrow = ic("Interface\\Minimap\\MinimapArrow.blp");
     let skill_icons: Vec<Handle<Image>> = SKILLS
         .iter()
         .map(|s| ic(&format!("Interface\\Icons\\{}.blp", s.icon)))
@@ -259,326 +205,224 @@ fn build(
     let book = ic("Interface\\Icons\\INV_Misc_Book_09.blp");
     let rage = ic("Interface\\Icons\\Ability_Racial_BloodRage.blp");
     let steed = ic("Interface\\Icons\\Ability_Mount_Undeadhorse.blp");
+    let atlas = |y0: f32, y1: f32| ImageNode { image: bar.clone(), rect: Some(Rect::new(0.0, y0, 256.0, y1)), ..default() };
+    let abs = |left: f32, bottom: f32, w: f32, h: f32| Node {
+        position_type: PositionType::Absolute,
+        left: px(left),
+        bottom: px(bottom),
+        width: px(w),
+        height: px(h),
+        ..default()
+    };
 
-    // ===== Alt çubuk =====
+    // ===== Alt çubuk (WoW MainMenuBar) =====
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(0),
                 left: Val::Percent(50.0),
-                margin: UiRect::left(px(-470)),
-                width: px(940),
-                height: px(132),
-                align_items: AlignItems::FlexEnd,
+                margin: UiRect::left(px(-HUD_W / 2.0)),
+                width: px(HUD_W),
+                height: px(128),
                 ..default()
             },
             RelativeCursorPosition::default(),
             BlocksWorld,
         ))
-        .with_children(|bar| {
-            // Sol süs + HP küresi
-            bar.spawn((
-                Node { width: px(96), height: px(96), margin: UiRect::right(px(-40)), ..default() },
-                ImageNode::new(endcap.clone()),
-                ZIndex(0),
-            ));
-            orb(bar, &ui, hp_img.clone(), HudText::HpOrb);
-            // Orta taş panel
-            bar.spawn((
-                Node {
-                    flex_grow: 1.0,
-                    height: px(92),
-                    margin: UiRect::horizontal(px(-14)),
-                    padding: UiRect::new(px(22), px(22), px(6), px(4)),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
-                    border: UiRect::all(px(2)),
-                    border_radius: BorderRadius::top(px(10)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.09, 0.08, 0.07, 0.94)),
-                BorderColor::all(Color::srgb(0.5, 0.4, 0.24)),
-                ZIndex(-1),
-            ))
-            .with_children(|mid| {
-                // Üst sıra: güçlendirmeler
-                mid.spawn(Node { column_gap: px(4), height: px(30), align_items: AlignItems::Center, ..default() })
-                    .with_children(|r| {
-                        r.spawn((
-                            Node { width: px(28), height: px(28), border: UiRect::all(px(1)), ..default() },
-                            ImageNode::new(rage),
-                            BorderColor::all(Color::srgb(0.9, 0.3, 0.2)),
-                            Visibility::Hidden,
-                            RageBuff,
-                        ))
-                        .with_child((
-                            Node { position_type: PositionType::Absolute, bottom: px(-2), right: px(1), ..default() },
-                            text(&ui, "", 11.0, TEXT),
-                            TextShadow::default(),
-                            HudText::RageTime,
-                        ));
-                        r.spawn((
-                            Node { width: px(28), height: px(28), border: UiRect::all(px(1)), ..default() },
-                            ImageNode::new(steed),
-                            BorderColor::all(Color::srgb(0.45, 0.75, 1.0)),
-                            Visibility::Hidden,
-                            MountBuff,
-                        ))
-                        .with_child((
-                            Node { position_type: PositionType::Absolute, bottom: px(-2), right: px(1), ..default() },
-                            text(&ui, "", 11.0, TEXT),
-                            TextShadow::default(),
-                            HudText::MountTime,
-                        ));
-                        r.spawn((Node { flex_grow: 1.0, ..default() },));
-                        r.spawn((text(&ui, "", 13.0, GOLD), HudText::Yang));
-                    });
-                // Alt sıra: beceriler + iksirler + menü
-                mid.spawn(Node { column_gap: px(4), align_items: AlignItems::Center, ..default() })
-                    .with_children(|r| {
-                        for i in 0..4 {
-                            r.spawn((slot_box(42.0), SkillSlotNode(i))).with_children(|s| {
-                                s.spawn((Node { width: px(40), height: px(40), ..default() }, ImageNode::new(skill_icons[i].clone())));
-                                s.spawn((
-                                    Node {
-                                        position_type: PositionType::Absolute,
-                                        left: px(0),
-                                        bottom: px(0),
-                                        width: Val::Percent(100.0),
-                                        height: Val::Percent(0.0),
-                                        ..default()
-                                    },
-                                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
-                                    SkillShade(i),
-                                ));
-                                s.spawn((
-                                    Node {
-                                        position_type: PositionType::Absolute,
-                                        width: Val::Percent(100.0),
-                                        height: Val::Percent(100.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    children![(text(&ui, "", 15.0, TEXT), TextShadow::default(), SkillCdText(i))],
-                                ));
-                                s.spawn((
-                                    Node { position_type: PositionType::Absolute, left: px(2), top: px(0), ..default() },
-                                    text(&ui, (i + 1).to_string(), 11.0, GOLD),
-                                    TextShadow::default(),
-                                ));
-                            });
-                        }
-                        r.spawn(Node { width: px(8), ..default() });
-                        for i in 0..4 {
-                            r.spawn((slot_box(42.0), QuickSlotNode(i))).with_children(|s| {
-                                s.spawn((
-                                    Node { width: px(40), height: px(40), ..default() },
-                                    ImageNode::default(),
-                                    Visibility::Hidden,
-                                    QuickIcon(i),
-                                ));
-                                s.spawn((
-                                    Node { position_type: PositionType::Absolute, left: px(2), top: px(0), ..default() },
-                                    text(&ui, QUICK_LABELS[i], 10.0, TEXT_DIM),
-                                    TextShadow::default(),
-                                ));
-                                s.spawn((
-                                    Node { position_type: PositionType::Absolute, right: px(2), bottom: px(0), ..default() },
-                                    text(&ui, "", 12.0, TEXT),
-                                    TextShadow::default(),
-                                    QuickCount(i),
-                                ));
-                            });
-                        }
-                        r.spawn(Node { flex_grow: 1.0, ..default() });
-                        for (b, img) in [(MenuBtn::Inventory, bag), (MenuBtn::Help, book)] {
-                            r.spawn((
-                                Button,
-                                Node { width: px(30), height: px(30), border: UiRect::all(px(1)), ..default() },
-                                BorderColor::all(SLOT_BORDER),
-                                ImageNode::new(img),
-                                b,
-                            ));
-                        }
-                    });
-                // EXP çubuğu
-                mid.spawn((
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: px(7),
-                        border: UiRect::all(px(1)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.9)),
-                    BorderColor::all(Color::srgb(0.3, 0.25, 0.15)),
-                ))
-                .with_children(|e| {
-                    e.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(0),
-                            top: px(0),
-                            height: Val::Percent(100.0),
-                            width: Val::Percent(0.0),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.65, 0.4, 1.0)),
+        .with_children(|bar_root| {
+            // Grifonlar (kürelerin arkasında).
+            let cap = |flip: bool| ImageNode { image: endcap.clone(), rect: Some(Rect::new(0.0, 43.0, 128.0, 128.0)), flip_x: flip, ..default() };
+            bar_root.spawn((abs(BAR_X - ORB_PX - 92.0, 0.0, 128.0, 85.0), cap(false), ZIndex(0)));
+            bar_root.spawn((abs(BAR_X + BAR_W + ORB_PX - 36.0, 0.0, 128.0, 85.0), cap(true), ZIndex(0)));
+            // Ana çubuk şeritleri (atlasın 1. ve 2. eylem şeritleri) + üst raylar.
+            bar_root.spawn((abs(BAR_X, 0.0, 256.0, 44.0), atlas(212.0, 256.0), ZIndex(1)));
+            bar_root.spawn((abs(BAR_X + 256.0, 0.0, 256.0, 44.0), atlas(148.0, 192.0), ZIndex(1)));
+            // EXP çubuğu: UI-StatusBar (WoW mor), alt ve üst ray atlastan.
+            bar_root.spawn((abs(BAR_X, 44.0, BAR_W, 10.0), ImageNode { image: status.clone(), color: Color::srgba(0.12, 0.0, 0.12, 0.9), ..default() }, ZIndex(1)))
+                .with_children(|x| {
+                    x.spawn((
+                        Node { position_type: PositionType::Absolute, left: px(0), top: px(0), height: Val::Percent(100.0), width: Val::Percent(0.0), ..default() },
+                        ImageNode { image: status.clone(), color: Color::srgb(0.58, 0.0, 0.55), ..default() },
                         ExpFill,
                     ));
+                    x.spawn((
+                        Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
+                        children![(text(&ui, "", 9.0, TEXT), TextShadow::default(), HudText::Exp)],
+                    ));
                 });
-                mid.spawn((
-                    Node { position_type: PositionType::Absolute, bottom: px(-1), right: px(24), ..default() },
-                    text(&ui, "", 10.0, TEXT_DIM),
-                    HudText::Exp,
-                ));
-            });
-            orb(bar, &ui, sp_img.clone(), HudText::SpOrb);
-            bar.spawn((
-                Node { width: px(96), height: px(96), margin: UiRect::left(px(-40)), ..default() },
-                ImageNode { image: endcap, flip_x: true, ..default() },
-                ZIndex(0),
-            ));
+            for (i, y) in [(0.0f32, 202.0f32), (256.0, 138.0)] {
+                bar_root.spawn((abs(BAR_X + i, 54.0, 256.0, 4.0), atlas(y, y + 4.0), ZIndex(1)));
+                bar_root.spawn((abs(BAR_X + i, 40.0, 256.0, 4.0), atlas(y, y + 4.0), ZIndex(2)));
+            }
+            // Güçlendirmeler + Yang (EXP çubuğunun üstünde).
+            bar_root
+                .spawn(Node {
+                    position_type: PositionType::Absolute,
+                    left: px(BAR_X + 4.0),
+                    bottom: px(62),
+                    width: px(BAR_W - 8.0),
+                    height: px(30),
+                    column_gap: px(4),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|r| {
+                    for (img, col, marker, label) in [
+                        (rage.clone(), Color::srgb(0.9, 0.3, 0.2), true, HudText::RageTime),
+                        (steed.clone(), Color::srgb(0.45, 0.75, 1.0), false, HudText::MountTime),
+                    ] {
+                        let mut e = r.spawn((
+                            Node { width: px(28), height: px(28), border: UiRect::all(px(1)), ..default() },
+                            ImageNode::new(img),
+                            BorderColor::all(col),
+                            Visibility::Hidden,
+                        ));
+                        if marker {
+                            e.insert(RageBuff);
+                        } else {
+                            e.insert(MountBuff);
+                        }
+                        e.with_child((
+                            Node { position_type: PositionType::Absolute, bottom: px(-2), right: px(1), ..default() },
+                            text(&ui, "", 11.0, TEXT),
+                            TextShadow::default(),
+                            label,
+                        ));
+                    }
+                    r.spawn((Node { flex_grow: 1.0, ..default() },));
+                    // SP küresinin altında kalmasın.
+                    r.spawn((Node { margin: UiRect::right(px(28)), ..default() }, children![(text(&ui, "", 13.0, GOLD), TextShadow::default(), HudText::Yang)]));
+                });
+            // Slotlar 0-3: beceriler.
+            for i in 0..4 {
+                bar_root.spawn((slot_node(slot_x(i)), SkillSlotNode(i))).with_children(|s| {
+                    s.spawn((Node { width: px(SLOT), height: px(SLOT), ..default() }, ImageNode::new(skill_icons[i].clone())));
+                    s.spawn((
+                        Node { position_type: PositionType::Absolute, left: px(0), bottom: px(0), width: Val::Percent(100.0), height: Val::Percent(0.0), ..default() },
+                        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+                        SkillShade(i),
+                    ));
+                    s.spawn((
+                        Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
+                        children![(text(&ui, "", 15.0, TEXT), TextShadow::default(), SkillCdText(i))],
+                    ));
+                    s.spawn((
+                        Node { position_type: PositionType::Absolute, right: px(2), top: px(0), ..default() },
+                        text(&ui, (i + 1).to_string(), 11.0, TEXT_DIM),
+                        TextShadow::default(),
+                    ));
+                });
+            }
+            // Slotlar 4-7: iksirler (F1-F4).
+            for i in 0..4 {
+                bar_root.spawn((slot_node(slot_x(4 + i)), QuickSlotNode(i))).with_children(|s| {
+                    s.spawn((Node { width: px(SLOT), height: px(SLOT), ..default() }, ImageNode::default(), Visibility::Hidden, QuickIcon(i)));
+                    s.spawn((
+                        Node { position_type: PositionType::Absolute, right: px(2), top: px(0), ..default() },
+                        text(&ui, QUICK_LABELS[i], 10.0, TEXT_DIM),
+                        TextShadow::default(),
+                    ));
+                    s.spawn((
+                        Node { position_type: PositionType::Absolute, right: px(2), bottom: px(0), ..default() },
+                        text(&ui, "", 12.0, TEXT),
+                        TextShadow::default(),
+                        QuickCount(i),
+                    ));
+                });
+            }
+            // Slot 10-11: çanta, yardım.
+            for (k, (b, img)) in [(MenuBtn::Inventory, bag), (MenuBtn::Help, book)].into_iter().enumerate() {
+                bar_root.spawn((slot_node(slot_x(10 + k)), Button, ImageNode::new(img), b));
+            }
+            // Küreler.
+            orb(bar_root, &ui, &mask, &ring, BAR_X - ORB_PX + 10.0, true, HudText::HpOrb);
+            orb(bar_root, &ui, &mask, &ring, BAR_X + BAR_W - 10.0, false, HudText::SpOrb);
         });
 
-    // ===== Sol üst: oyuncu çerçevesi =====
+    // ===== Sol üst: WoW PlayerFrame (232×100, UI-TargetingFrame aynalı) =====
+    unit_frame(&mut commands, &ui, UnitFrame {
+        left: 0.0,
+        art: ImageNode { image: frame.clone(), rect: Some(Rect::new(24.0, 0.0, 256.0, 100.0)), flip_x: true, ..default() },
+        portrait: portrait.clone(),
+        portrait_x: 42.0,
+        bars_x: 106.0,
+        level_x: 41.0,
+        status: status.clone(),
+        player: true,
+    });
+
+    // ===== Üst: WoW TargetFrame =====
+    unit_frame(&mut commands, &ui, UnitFrame {
+        left: 250.0,
+        art: ImageNode { image: target_nomana.clone(), rect: Some(Rect::new(24.0, 0.0, 256.0, 100.0)), ..default() },
+        portrait: monster.clone(),
+        portrait_x: 126.0,
+        bars_x: 6.0,
+        level_x: 167.0,
+        status: status.clone(),
+        player: false,
+    });
+
+    // ===== Sağ üst: WoW mini harita (UI-Minimap-Border 240 px) + görev =====
+    // Dokuda halka merkezi (168.5, 104), iç yarıçap ≈64; bölge şeridi x 83-255, y 1-26.
+    let k = MM_PX / 256.0;
     commands
         .spawn(Node {
             position_type: PositionType::Absolute,
-            left: px(10),
-            top: px(10),
-            align_items: AlignItems::Center,
-            column_gap: px(6),
+            right: px(0),
+            top: px(0),
+            width: px(MM_PX),
+            height: px(MM_PX),
             ..default()
         })
-        .with_children(|f| {
-            f.spawn((
+        .with_children(|m| {
+            let r = 64.0 * k;
+            m.spawn((
                 Node {
-                    width: px(64),
-                    height: px(64),
-                    border: UiRect::all(px(3)),
-                    border_radius: BorderRadius::all(px(32)),
+                    position_type: PositionType::Absolute,
+                    left: px(168.5 * k - r),
+                    top: px(104.0 * k - r),
+                    width: px(2.0 * r),
+                    height: px(2.0 * r),
+                    border_radius: BorderRadius::all(px(r)),
                     overflow: Overflow::clip(),
                     ..default()
                 },
-                BorderColor::all(Color::srgb(0.75, 0.6, 0.3)),
-                BackgroundColor(Color::BLACK),
-                children![(Node { width: px(58), height: px(58), ..default() }, ImageNode::new(portrait))],
-            ));
-            f.spawn(Node { flex_direction: FlexDirection::Column, row_gap: px(3), ..default() })
-                .with_children(|c| {
-                    c.spawn((
-                        Node {
-                            padding: UiRect::new(px(8), px(8), px(1), px(1)),
-                            border: UiRect::all(px(1)),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgba(0.05, 0.04, 0.03, 0.85)),
-                        BorderColor::all(Color::srgb(0.5, 0.4, 0.22)),
-                        children![(text(&ui, "", 14.0, TEXT), HudText::FrameName)],
-                    ));
-                    c.spawn(frame_bar(150.0, 12.0, Color::srgb(0.1, 0.75, 0.15), FrameHpFill, HudText::FrameHp, &ui));
-                    c.spawn(frame_bar(150.0, 9.0, Color::srgb(0.12, 0.3, 0.9), FrameSpFill, HudText::FrameSp, &ui));
-                });
-        });
-
-    // ===== Üst orta: hedef =====
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: px(8),
-                left: Val::Percent(50.0),
-                margin: UiRect::left(px(-160)),
-                width: px(320),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                row_gap: px(2),
-                ..default()
-            },
-            Visibility::Hidden,
-            TargetFrame,
-        ))
-        .with_children(|p| {
-            p.spawn((text(&ui, "", 16.0, TEXT), TextShadow::default(), HudText::TargetName));
-            p.spawn((
+                ImageNode { image: mask.clone(), color: Color::srgba(0.1, 0.17, 0.07, 0.9), ..default() },
+                Radar,
+            ))
+            .with_children(|c| {
+                c.spawn((
+                    Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+                    RadarDots,
+                ));
+                c.spawn((
+                    Node { position_type: PositionType::Absolute, left: px(r - 8.0), top: px(r - 8.0), width: px(16), height: px(16), ..default() },
+                    ImageNode { image: arrow.clone(), rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)), ..default() },
+                    UiTransform::default(),
+                    ZIndex(2),
+                    PlayerArrow,
+                ));
+            });
+            m.spawn((Node { position_type: PositionType::Absolute, width: px(MM_PX), height: px(MM_PX), ..default() }, ImageNode::new(mm_border.clone()), ZIndex(3)));
+            m.spawn((
                 Node {
-                    width: px(300),
-                    height: px(14),
-                    border: UiRect::all(px(2)),
-                    border_radius: BorderRadius::all(px(3)),
+                    position_type: PositionType::Absolute,
+                    left: px(86.0 * k),
+                    top: px(3.0 * k),
+                    width: px(140.0 * k),
+                    height: px(20.0 * k),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
-                BorderColor::all(Color::srgb(0.45, 0.35, 0.2)),
-            ))
-            .with_children(|b| {
-                b.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(0),
-                        top: px(0),
-                        height: Val::Percent(100.0),
-                        width: Val::Percent(100.0),
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgb(0.85, 0.08, 0.06)),
-                    TargetFill,
-                ));
-                b.spawn((text(&ui, "", 10.0, TEXT), TextShadow::default(), HudText::TargetHp));
-            });
-        });
-
-    // ===== Sağ üst: radar + bölge + görev =====
-    commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            right: px(10),
-            top: px(8),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::FlexEnd,
-            row_gap: px(4),
-            ..default()
-        })
-        .with_children(|r| {
-            r.spawn((
-                Node { padding: UiRect::new(px(8), px(8), px(2), px(2)), border: UiRect::all(px(1)), ..default() },
-                BackgroundColor(Color::srgba(0.05, 0.04, 0.03, 0.85)),
-                BorderColor::all(Color::srgb(0.55, 0.45, 0.25)),
-                children![(text(&ui, "", 12.0, GOLD), HudText::Zone)],
+                ZIndex(4),
+                children![(text(&ui, "", 11.0, GOLD), TextShadow::default(), HudText::Zone)],
             ));
-            r.spawn((
-                Node {
-                    width: px(150),
-                    height: px(150),
-                    border: UiRect::all(px(4)),
-                    border_radius: BorderRadius::all(px(75)),
-                    overflow: Overflow::clip(),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.12, 0.22, 0.08, 0.85)),
-                BorderColor::all(Color::srgb(0.7, 0.56, 0.3)),
-                Radar,
-            ))
-            .with_children(|m| {
-                m.spawn((
-                    Node { position_type: PositionType::Absolute, width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
-                    RadarDots,
-                ));
-            });
-            r.spawn((
-                Node {
-                    padding: UiRect::all(px(6)),
-                    margin: UiRect::top(px(4)),
-                    max_width: px(240),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.45)),
+            m.spawn((
+                Node { position_type: PositionType::Absolute, right: px(10), top: px(190.0 * k), max_width: px(240), padding: UiRect::all(px(6)), ..default() },
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.35)),
                 children![(text(&ui, "", 13.0, TEXT), TextShadow::default(), HudText::Quest)],
             ));
         });
@@ -594,11 +438,9 @@ fn build(
             padding: UiRect::all(px(6)),
             flex_direction: FlexDirection::Column,
             justify_content: JustifyContent::FlexEnd,
-            border: UiRect::all(px(1)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.45)),
-        BorderColor::all(Color::srgba(0.4, 0.33, 0.2, 0.6)),
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.3)),
         LogBox,
     ));
 
@@ -672,81 +514,145 @@ fn build(
     ));
 }
 
-fn orb(parent: &mut ChildSpawnerCommands, ui: &UiAssets, img: Handle<Image>, label: HudText) {
+/// Mini harita dokusunun ekrandaki boyu.
+const MM_PX: f32 = 240.0;
+
+/// Küre: WoW yuvarlak maskesi koyu (boş) + aynı disk renkli ve alttan kırpılmış (dolu) + altın halka.
+fn orb(parent: &mut ChildSpawnerCommands, ui: &UiAssets, mask: &Handle<Image>, ring: &Handle<Image>, left: f32, hp: bool, label: HudText) {
+    let (full, empty) = if hp {
+        (Color::srgb(0.85, 0.05, 0.03), Color::srgba(0.12, 0.0, 0.0, 0.92))
+    } else {
+        (Color::srgb(0.08, 0.25, 0.95), Color::srgba(0.0, 0.02, 0.12, 0.92))
+    };
     parent
         .spawn((
             Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                bottom: px(4),
                 width: px(ORB_PX),
                 height: px(ORB_PX),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
-                margin: UiRect::bottom(px(6)),
                 ..default()
             },
-            ImageNode::new(img),
-            ZIndex(1),
+            ZIndex(4),
         ))
-        .with_child((text(ui, "", 13.0, TEXT), TextShadow::default(), label));
-}
-
-fn frame_bar(w: f32, h: f32, fill: Color, marker: impl Bundle, label: HudText, ui: &UiAssets) -> impl Bundle {
-    (
-        Node {
-            width: px(w),
-            height: px(h),
-            border: UiRect::all(px(1)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        BorderColor::all(Color::srgb(0.35, 0.3, 0.18)),
-        children![
-            (
+        .with_children(|o| {
+            let fill_abs = Node { position_type: PositionType::Absolute, left: px(0), bottom: px(0), width: px(ORB_PX), height: px(ORB_PX), ..default() };
+            o.spawn((fill_abs.clone(), ImageNode { image: mask.clone(), color: empty, ..default() }));
+            o.spawn((
                 Node {
                     position_type: PositionType::Absolute,
                     left: px(0),
-                    top: px(0),
-                    height: Val::Percent(100.0),
+                    bottom: px(0),
                     width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(fill),
-                marker,
-            ),
-            (text(ui, "", h - 1.0, TEXT), TextShadow::default(), label),
-        ],
-    )
+                OrbFill(hp),
+            ))
+            .with_child((fill_abs, ImageNode { image: mask.clone(), color: full, ..default() }));
+            // Halka dokusu 38/64'lük köşede; disk kenarını örtsün diye biraz taşar.
+            o.spawn((
+                Node { position_type: PositionType::Absolute, left: px(-9), top: px(-9), width: px(ORB_PX + 18.0), height: px(ORB_PX + 18.0), ..default() },
+                ImageNode { image: ring.clone(), rect: Some(Rect::new(1.0, 1.0, 39.0, 39.0)), ..default() },
+            ));
+            o.spawn((text(ui, "", 13.0, TEXT), TextShadow::default(), label));
+        });
 }
+
+/// WoW birim çerçevesi (PlayerFrame / TargetFrame, 232×100): portre, çerçeve dokusu, ad, seviye,
+/// UI-StatusBar can (yeşil) ve mana (mavi) çubukları. Konumlar FrameXML'deki gibi.
+struct UnitFrame {
+    left: f32,
+    art: ImageNode,
+    portrait: Handle<Image>,
+    portrait_x: f32,
+    bars_x: f32,
+    level_x: f32,
+    status: Handle<Image>,
+    player: bool,
+}
+
+fn unit_frame(commands: &mut Commands, ui: &UiAssets, f: UnitFrame) {
+    let at = |x: f32, y: f32, w: f32, h: f32| Node {
+        position_type: PositionType::Absolute,
+        left: px(x),
+        top: px(y),
+        width: px(w),
+        height: px(h),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    let mut root = commands.spawn(Node {
+        position_type: PositionType::Absolute,
+        left: px(f.left),
+        top: px(4),
+        width: px(232),
+        height: px(100),
+        ..default()
+    });
+    if !f.player {
+        root.insert((Visibility::Hidden, TargetFrame));
+    }
+    root.with_children(|c| {
+        // Portre (yuvarlak), çerçevenin altında.
+        c.spawn((
+            Node { border_radius: BorderRadius::all(px(32)), overflow: Overflow::clip(), ..at(f.portrait_x, 12.0, 64.0, 64.0) },
+            ZIndex(0),
+            children![(Node { width: px(64), height: px(64), ..default() }, ImageNode::new(f.portrait.clone()))],
+        ));
+        // Çubuklar (çerçevenin altında kalır, çerçevedeki yuvaya oturur).
+        let bar = |y: f32| {
+            (
+                at(f.bars_x, y, 119.0, 12.0),
+                ImageNode { image: f.status.clone(), color: Color::srgba(0.0, 0.0, 0.0, 0.6), ..default() },
+                ZIndex(0),
+            )
+        };
+        let fill = |col: Color| {
+            (
+                Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+                ImageNode { image: f.status.clone(), color: col, ..default() },
+            )
+        };
+        if f.player {
+            c.spawn(bar(41.0)).with_children(|b| {
+                b.spawn((fill(Color::srgb(0.0, 0.9, 0.0)), FrameHpFill));
+            });
+            c.spawn(bar(52.0)).with_children(|b| {
+                b.spawn((fill(Color::srgb(0.0, 0.0, 1.0)), FrameSpFill));
+            });
+        } else {
+            c.spawn(bar(41.0)).with_children(|b| {
+                b.spawn((fill(Color::srgb(0.0, 0.9, 0.0)), TargetFill));
+            });
+        }
+        // Çerçeve dokusu.
+        c.spawn((at(0.0, 0.0, 232.0, 100.0), f.art.clone(), ZIndex(1), TargetArtIf(!f.player)));
+        // Metinler (çerçevenin üstünde).
+        let (name, hp_text, level) = if f.player {
+            (HudText::FrameName, HudText::FrameHp, HudText::FrameLevel)
+        } else {
+            (HudText::TargetName, HudText::TargetHp, HudText::TargetLevel)
+        };
+        c.spawn((at(f.bars_x, 22.0, 119.0, 16.0), ZIndex(2), children![(text(ui, "", 12.0, GOLD), TextShadow::default(), name)]));
+        c.spawn((at(f.bars_x, 41.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), TextShadow::default(), hp_text)]));
+        if f.player {
+            c.spawn((at(f.bars_x, 52.0, 119.0, 12.0), ZIndex(2), children![(text(ui, "", 9.0, TEXT), TextShadow::default(), HudText::FrameSp)]));
+        }
+        c.spawn((at(f.level_x, 58.0, 24.0, 16.0), ZIndex(2), children![(text(ui, "", 11.0, GOLD), TextShadow::default(), level)]));
+    });
+}
+
+/// Hedef çerçevesinin dokusu (metin taşında Elite çerçevesi).
+#[derive(Component)]
+struct TargetArtIf(bool);
 
 // ---------- güncellemeler ----------
-
-fn update_orbs(
-    time: Res<Time>,
-    stats: Res<PlayerStats>,
-    d: Res<Derived>,
-    mut orbs: ResMut<OrbImages>,
-    mut images: ResMut<Assets<Image>>,
-    mut tick: Local<f32>,
-) {
-    let hpf = (stats.hp.max(0) as f32 / d.max_hp.max(1) as f32).clamp(0.0, 1.0);
-    let spf = (stats.sp.max(0) as f32 / d.max_sp.max(1) as f32).clamp(0.0, 1.0);
-    *tick += time.delta_secs();
-    // Dalga animasyonu için ~15 fps, değer değişince hemen.
-    let changed = (hpf - orbs.last.0).abs() > 0.003 || (spf - orbs.last.1).abs() > 0.003;
-    if !changed && *tick < 0.066 {
-        return;
-    }
-    *tick = 0.0;
-    orbs.last = (hpf, spf);
-    let t = time.elapsed_secs();
-    if let Some(img) = images.get_mut(&orbs.hp) {
-        img.data = Some(orb_pixels(hpf, HP_COL, t));
-    }
-    if let Some(img) = images.get_mut(&orbs.sp) {
-        img.data = Some(orb_pixels(spf, SP_COL, t + 1.3));
-    }
-}
 
 fn update_bars(
     time: Res<Time>,
@@ -760,6 +666,7 @@ fn update_bars(
     mut exp: Query<&mut Node, (With<ExpFill>, Without<FrameHpFill>, Without<FrameSpFill>)>,
     mut rage: Query<&mut Visibility, (With<RageBuff>, Without<MountBuff>)>,
     mut steed: Query<&mut Visibility, (With<MountBuff>, Without<RageBuff>)>,
+    mut orbs: Query<(&OrbFill, &mut Node), (Without<FrameHpFill>, Without<FrameSpFill>, Without<ExpFill>)>,
 ) {
     let now = time.elapsed_secs();
     let hpf = (stats.hp.max(0) as f32 / d.max_hp.max(1) as f32).clamp(0.0, 1.0);
@@ -774,6 +681,9 @@ fn update_bars(
     if let Ok(mut n) = exp.single_mut() {
         n.width = Val::Percent(ef.clamp(0.0, 1.0) * 100.0);
     }
+    for (o, mut n) in &mut orbs {
+        n.height = Val::Percent(if o.0 { hpf } else { spf } * 100.0);
+    }
     let raging = now < stats.rage_until;
     if let Ok(mut v) = rage.single_mut() {
         *v = if raging { Visibility::Inherited } else { Visibility::Hidden };
@@ -785,12 +695,14 @@ fn update_bars(
         let v = match t {
             HudText::HpOrb => format!("{}\n/{}", stats.hp.max(0), d.max_hp),
             HudText::SpOrb => format!("{}\n/{}", stats.sp.max(0), d.max_sp),
-            HudText::FrameName => format!("{}  Lv {}", stats.name, stats.level),
+            HudText::FrameName => stats.name.clone(),
+            HudText::FrameLevel => stats.level.to_string(),
             HudText::FrameHp => format!("{} / {}", stats.hp.max(0), d.max_hp),
             HudText::FrameSp => format!("{} / {}", stats.sp.max(0), d.max_sp),
             HudText::Exp => format!("EXP %{:.1}", ef * 100.0),
             HudText::Yang => format!("{} Yang", thousands(inv.yang)),
-            HudText::Zone => if crate::game::terrain::data().is_some() { "PYUNGMOO (Jinno - Mavi Bayrak)".to_string() } else { "ELWYNN FOREST (Metin Bölgesi)".to_string() },
+            // WoW mini harita şeridine sığan kısa ad.
+            HudText::Zone => if crate::game::terrain::data().is_some() { "Pyungmoo".to_string() } else { "Elwynn Forest".to_string() },
             HudText::Quest => quest.text(),
             HudText::RageTime => {
                 if raging { format!("{:.0}", stats.rage_until - now) } else { String::new() }
@@ -816,6 +728,7 @@ fn update_target(
     target: Res<PlayerTarget>,
     enemies: Query<(&Enemy, &Health)>,
     stats: Res<PlayerStats>,
+    (mut wa, mut images, mut art): (Option<ResMut<WorldAssets>>, ResMut<Assets<Image>>, Query<(&TargetArtIf, &mut ImageNode)>),
     mut frame: Query<&mut Visibility, With<TargetFrame>>,
     mut fill: Query<&mut Node, With<TargetFill>>,
     mut texts: Query<(&HudText, &mut Text, &mut TextColor)>,
@@ -826,13 +739,28 @@ fn update_target(
         return;
     };
     *vis = Visibility::Inherited;
+    if let Some(wa) = wa.as_deref_mut() {
+        let path = if en.is_metin {
+            "Interface\\TargetingFrame\\UI-TargetingFrame-Elite.blp"
+        } else {
+            "Interface\\TargetingFrame\\UI-TargetingFrame-NoMana.blp"
+        };
+        if let Some(h) = icon(wa, &mut images, path) {
+            for (t, mut img) in &mut art {
+                if t.0 && img.image != h {
+                    img.image = h.clone();
+                }
+            }
+        }
+    }
     if let Ok(mut n) = fill.single_mut() {
         n.width = Val::Percent(hp.hp.max(0) as f32 / hp.max.max(1) as f32 * 100.0);
     }
     for (t, mut s, mut c) in &mut texts {
         match t {
+            HudText::TargetLevel => s.0 = en.level.to_string(),
             HudText::TargetName => {
-                s.0 = format!("{} (Lv. {})", en.name, en.level);
+                s.0 = en.name.to_string();
                 c.0 = if en.is_metin { Color::srgb(1.0, 0.35, 0.3) } else { name_color(en, stats.level) };
             }
             HudText::TargetHp => s.0 = format!("{} / {}", hp.hp.max(0), hp.max),
@@ -999,9 +927,9 @@ fn use_quick(
     }
 }
 
-fn menu_buttons(mut q: Query<(&MenuBtn, &Interaction, &mut BorderColor), Changed<Interaction>>, mut w: ResMut<Windows>) {
-    for (b, i, mut bc) in &mut q {
-        *bc = BorderColor::all(if *i == Interaction::None { SLOT_BORDER } else { GOLD });
+fn menu_buttons(mut q: Query<(&MenuBtn, &Interaction, &mut ImageNode), Changed<Interaction>>, mut w: ResMut<Windows>) {
+    for (b, i, mut img) in &mut q {
+        img.color = if *i == Interaction::None { Color::WHITE } else { Color::srgb(1.3, 1.2, 0.9) };
         if *i == Interaction::Pressed {
             match b {
                 MenuBtn::Inventory => w.inventory = !w.inventory,
@@ -1011,7 +939,8 @@ fn menu_buttons(mut q: Query<(&MenuBtn, &Interaction, &mut BorderColor), Changed
     }
 }
 
-/// Radar: oyuncu ortada, kamera yönü yukarı; metin mor, mob kırmızı, NPC sarı.
+/// Mini harita: oyuncu ortada, kamera yönü yukarı. İşaretler WoW ObjectIcons (32 px hücreler:
+/// 1 kırmızı = düşman, 3 sarı = NPC, 0 altın = metin taşı); oyuncu MinimapArrow, yönüne döner.
 fn radar(
     mut commands: Commands,
     time: Res<Time>,
@@ -1020,50 +949,57 @@ fn radar(
     cam: Query<&OrbitCam>,
     enemies: Query<(&Transform, Option<&Metin>), (With<Enemy>, Without<Dying>)>,
     npcs: Query<&Transform, With<Npc>>,
-    mut acc: Local<f32>,
+    mut arrow: Query<&mut UiTransform, With<PlayerArrow>>,
+    (mut wa, mut images, mut acc): (Option<ResMut<WorldAssets>>, ResMut<Assets<Image>>, Local<f32>),
 ) {
+    let (Ok(root), Ok(p)) = (dots.single(), player.single()) else { return };
+    let yaw = cam.single().map(|c| c.yaw).unwrap_or(0.0);
+    if let Ok(mut t) = arrow.single_mut() {
+        // Ok dokusu yukarı bakar; harita kamera yönüne göre döndüğü için fark kadar dön.
+        let rel = crate::game::player::yaw_of(p.rotation) - yaw;
+        t.rotation = Rot2::radians(-rel);
+    }
     *acc += time.delta_secs();
     if *acc < 0.15 {
         return;
     }
     *acc = 0.0;
-    let (Ok(root), Ok(p)) = (dots.single(), player.single()) else { return };
-    let yaw = cam.single().map(|c| c.yaw).unwrap_or(0.0);
+    let Some(wa) = wa.as_deref_mut() else { return };
+    let Some(icons) = icon(wa, &mut images, "Interface\\Minimap\\ObjectIcons.blp") else { return };
     let rot = Quat::from_rotation_y(-yaw);
     const RANGE: f32 = 80.0;
-    const R: f32 = 71.0;
+    let r = 64.0 * MM_PX / 256.0;
     commands.entity(root).despawn_children();
-    let mut put = |c: &mut ChildSpawnerCommands, world: Vec3, size: f32, color: Color| {
+    let put = |c: &mut ChildSpawnerCommands, world: Vec3, size: f32, cell: u32| {
         let d = rot * (world - p.translation);
-        let v = Vec2::new(d.x, d.z) / RANGE * R;
-        if v.length() > R - 3.0 {
+        let v = Vec2::new(d.x, d.z) / RANGE * r;
+        if v.length() > r - 4.0 {
             return;
         }
+        let (cx, cy) = ((cell % 4) as f32 * 32.0, (cell / 4) as f32 * 32.0);
         c.spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: px(R + v.x - size / 2.0),
-                top: px(R + v.y - size / 2.0),
+                left: px(r + v.x - size / 2.0),
+                top: px(r + v.y - size / 2.0),
                 width: px(size),
                 height: px(size),
-                border_radius: BorderRadius::all(px(size / 2.0)),
                 ..default()
             },
-            BackgroundColor(color),
+            ImageNode { image: icons.clone(), rect: Some(Rect::new(cx, cy, cx + 32.0, cy + 32.0)), ..default() },
         ));
     };
     commands.entity(root).with_children(|c| {
         for (xf, m) in &enemies {
             if m.is_some() {
-                put(c, xf.translation, 9.0, Color::srgb(0.85, 0.3, 1.0));
+                put(c, xf.translation, 14.0, 0);
             } else {
-                put(c, xf.translation, 4.0, Color::srgb(0.95, 0.2, 0.15));
+                put(c, xf.translation, 9.0, 1);
             }
         }
         for xf in &npcs {
-            put(c, xf.translation, 7.0, Color::srgb(1.0, 0.9, 0.2));
+            put(c, xf.translation, 10.0, 3);
         }
-        put(c, p.translation, 8.0, Color::WHITE);
     });
 }
 
