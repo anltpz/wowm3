@@ -98,6 +98,9 @@ struct LogBox;
 struct Banner;
 #[derive(Component)]
 struct DeathOverlay;
+/// Ölüm ekranındaki "yeniden doğ" ipucu (zindanda kat başı, dışarıda köy).
+#[derive(Component)]
+struct DeathHint;
 #[derive(Component)]
 struct HelpPanel;
 #[derive(Component)]
@@ -517,7 +520,7 @@ fn build(
                 TextColor(Color::srgb(1.0, 0.3, 0.25)),
                 TextShadow::default(),
             ),
-            text(&ui, "Köyde yeniden doğmak için R tuşuna bas", 18.0, TEXT),
+            (text(&ui, death_hint(false), 18.0, TEXT), DeathHint),
         ],
     ));
 
@@ -668,7 +671,7 @@ fn update_bars(
     stats: Res<PlayerStats>,
     d: Res<Derived>,
     inv: Res<Inventory>,
-    (quest, player): (Res<Quest>, Query<&Transform, With<Player>>),
+    (quest, player, run): (Res<Quest>, Query<&Transform, With<Player>>, Res<crate::game::dungeon::DungeonRun>),
     mut texts: Query<(&HudText, &mut Text)>,
     mut hp: Query<&mut Node, (With<FrameHpFill>, Without<FrameSpFill>, Without<ExpFill>)>,
     mut sp: Query<&mut Node, (With<FrameSpFill>, Without<FrameHpFill>, Without<ExpFill>)>,
@@ -706,7 +709,9 @@ fn update_bars(
             HudText::Exp => format!("EXP %{:.1}", ef * 100.0),
             // WoW mini harita şeridine sığan kısa ad.
             // WoW mini harita şeridi: bulunulan alt bölge (Northshire Valley, Goldshire...).
+            // Zindandayken zindanın adı (D-22).
             HudText::Zone => match (crate::game::terrain::data(), player.single()) {
+                _ if run.active() => run.state().map_or("", |r| r.def.name).to_string(),
                 (Some(_), _) => "Pyungmoo".to_string(),
                 (None, Ok(p)) => crate::game::zones::zone_name(benilla_assets::coords::bevy_to_wow(p.translation)).unwrap_or(crate::game::zones::DEFAULT_ZONE.name).to_string(),
                 (None, Err(_)) => "Elwynn Forest".to_string(),
@@ -1036,14 +1041,33 @@ fn radar(
     });
 }
 
+/// Ölüm ekranı ipucu: zindanda (D-22) kat başında, dışarıda köyde doğulur.
+pub fn death_hint(in_dungeon: bool) -> &'static str {
+    if in_dungeon {
+        "Kat başında yeniden doğmak için R tuşuna bas"
+    } else {
+        "Köyde yeniden doğmak için R tuşuna bas"
+    }
+}
+
 fn overlays(
     stats: Res<PlayerStats>,
     w: Res<Windows>,
+    run: Res<crate::game::dungeon::DungeonRun>,
+    mut hint: Query<&mut Text, With<DeathHint>>,
     mut death: Query<&mut Visibility, (With<DeathOverlay>, Without<HelpPanel>)>,
     mut help: Query<&mut Visibility, (With<HelpPanel>, Without<DeathOverlay>)>,
 ) {
     if let Ok(mut v) = death.single_mut() {
         *v = if stats.dead { Visibility::Inherited } else { Visibility::Hidden };
+    }
+    if stats.dead {
+        let want = death_hint(run.active() || crate::game::physics::indoor());
+        if let Ok(mut t) = hint.single_mut() {
+            if t.0 != want {
+                t.0 = want.to_string();
+            }
+        }
     }
     if let Ok(mut v) = help.single_mut() {
         *v = if w.help { Visibility::Inherited } else { Visibility::Hidden };

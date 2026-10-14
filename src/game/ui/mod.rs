@@ -6,6 +6,7 @@ use bevy::ui::RelativeCursorPosition;
 
 use benilla_assets::WorldAssets;
 
+pub mod dungeon_ui;
 pub mod hud;
 pub mod inventory_ui;
 pub mod shop_ui;
@@ -89,6 +90,7 @@ pub fn plugin(app: &mut App) {
             upgrade_ui::plugin,
             shop_ui::plugin,
             skin::plugin,
+            dungeon_ui::plugin,
         ));
 }
 
