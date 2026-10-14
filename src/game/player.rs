@@ -202,7 +202,7 @@ pub fn move_player(
             stats.dead = false;
             stats.hp = derived.max_hp / 2;
             stats.last_hurt = time.elapsed_secs();
-            xf.translation = wow_to_bevy(super::start_wow());
+            xf.translation = wow_to_bevy(super::village_wow());
             p.grounded = false;
             if let Ok(mut st) = body.single_mut() {
                 *st = AnimState::default();

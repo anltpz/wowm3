@@ -29,6 +29,14 @@ pub const START_WOW_DEFAULT: [f32; 3] = [-8935.0, -140.0, 82.0];
 
 /// Başlangıç noktası (WoW koordinatı). Öncelik: `AZM_FOCUS=x,y,z` > `AZM_MAPSTART=x,y` > kayıttaki konum
 /// (`save.ron`, su/bina içindeyse yok sayılır) > köy meydanı.
+/// Yeniden doğma noktası: Pyungmoo köy meydanı (kayıt konumundan bağımsız).
+pub fn village_wow() -> [f32; 3] {
+    match terrain::data() {
+        Some(d) => benilla_assets::coords::bevy_to_wow(d.to_world(382.0, 662.0)),
+        None => START_WOW_DEFAULT,
+    }
+}
+
 pub fn start_wow() -> [f32; 3] {
     static S: std::sync::OnceLock<[f32; 3]> = std::sync::OnceLock::new();
     *S.get_or_init(|| {
