@@ -62,7 +62,46 @@ fn load_db(mut commands: Commands, wa: Option<Res<WorldAssets>>) {
 /// (gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard).
 pub type ArmorSet = [Option<u32>; 8];
 
-/// Karakter gövdesi için `WowModel` kurar (bileşik doku + geosetler).
+/// İnsan görünümü (cinsiyet, ten, yüz, saç). Oyuncu `Appearance::PLAYER` kullanır; NPC'ler farklı.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Appearance {
+    pub female: bool,
+    pub skin: u8,
+    pub face: u8,
+    pub hair_style: u8,
+    pub hair_color: u8,
+    /// Erkekte sakal, kadında küpe/takı stili.
+    pub facial: u8,
+}
+
+impl Appearance {
+    pub const PLAYER: Self = Self {
+        female: SEX == 1,
+        skin: SKIN,
+        face: FACE,
+        hair_style: HAIR_STYLE,
+        hair_color: HAIR_COLOR,
+        facial: FACIAL_HAIR,
+    };
+    pub const fn male(skin: u8, face: u8, hair_style: u8, hair_color: u8, facial: u8) -> Self {
+        Self { female: false, skin, face, hair_style, hair_color, facial }
+    }
+    pub const fn female(skin: u8, face: u8, hair_style: u8, hair_color: u8, facial: u8) -> Self {
+        Self { female: true, skin, face, hair_style, hair_color, facial }
+    }
+    fn sex(&self) -> u8 {
+        self.female as u8
+    }
+    fn model(&self) -> &'static str {
+        if self.female {
+            "Character/Human/Female/HumanFemale.m2"
+        } else {
+            "Character/Human/Male/HumanMale.m2"
+        }
+    }
+}
+
+/// Karakter gövdesi için `WowModel` kurar (bileşik doku + geosetler), oyuncu görünümüyle.
 pub fn build_body(
     db: &CharDb,
     wa: &mut WorldAssets,
@@ -70,6 +109,19 @@ pub fn build_body(
     server: &AssetServer,
     armor: &ArmorSet,
 ) -> WowModel {
+    build_body_as(db, wa, images, server, armor, &Appearance::PLAYER)
+}
+
+/// `build_body` + verilen görünüm (NPC'ler: kadın/erkek, ten, saç).
+pub fn build_body_as(
+    db: &CharDb,
+    wa: &mut WorldAssets,
+    images: &mut Assets<Image>,
+    server: &AssetServer,
+    armor: &ArmorSet,
+    look: &Appearance,
+) -> WowModel {
+    let sex = look.sex();
     let equipment: [Option<&ItemDisplay>; 8] =
         std::array::from_fn(|i| armor[i].and_then(|id| db.items.get(id)));
     let atlas = {
@@ -77,12 +129,12 @@ pub fn build_body(
         db.sections.composite_body(
             &mut chain,
             RACE,
-            SEX,
-            SKIN,
-            FACE,
-            FACIAL_HAIR,
-            HAIR_STYLE,
-            HAIR_COLOR,
+            sex,
+            look.skin,
+            look.face,
+            look.facial,
+            look.hair_style,
+            look.hair_color,
             equipment,
             None,
             false,
@@ -101,7 +153,7 @@ pub fn build_body(
     };
     let hair = db
         .sections
-        .hair_texture(RACE, SEX, HAIR_STYLE, HAIR_COLOR)
+        .hair_texture(RACE, sex, look.hair_style, look.hair_color)
         .map(str::to_owned)
         .and_then(|p| wa.texture(&p, (true, true), images));
 
@@ -115,10 +167,10 @@ pub fn build_body(
     };
     let vis = db
         .geosets
-        .visible_geosets(RACE, SEX, HAIR_STYLE, FACIAL_HAIR, &eq);
+        .visible_geosets(RACE, sex, look.hair_style, look.facial, &eq);
     let geosets: Vec<u16> = (0u16..=1700).filter(|g| vis.contains(g)).collect();
 
-    let mut wm = WowModel::new(load_m2(server, "Character/Human/Male/HumanMale.m2"));
+    let mut wm = WowModel::new(load_m2(server, look.model()));
     wm.body = body;
     wm.hair = hair;
     wm.geosets = Some(geosets);

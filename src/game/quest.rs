@@ -11,6 +11,8 @@ use super::metin::Metin;
 use super::stats::{gain_exp, PlayerStats};
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
+/// Kayıtta eksik alanlar varsayılandan gelir (eski save.ron uyumu).
+#[serde(default)]
 pub struct Quest {
     pub stage: u32,
     pub kills: u32,

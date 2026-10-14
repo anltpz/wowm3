@@ -18,6 +18,7 @@ pub mod model;
 pub mod physics;
 pub mod player;
 pub mod quest;
+pub mod save;
 pub mod skills;
 pub mod stats;
 pub mod terrain;
@@ -26,7 +27,8 @@ pub mod ui;
 /// Oyunun başladığı nokta (WoW dünya koordinatı): Northshire Abbey önü.
 pub const START_WOW_DEFAULT: [f32; 3] = [-8935.0, -140.0, 82.0];
 
-/// Başlangıç noktası (WoW koordinatı); `AZM_FOCUS=x,y,z` ile değiştirilebilir.
+/// Başlangıç noktası (WoW koordinatı). Öncelik: `AZM_FOCUS=x,y,z` > `AZM_MAPSTART=x,y` > kayıttaki konum
+/// (`save.ron`, su/bina içindeyse yok sayılır) > köy meydanı.
 pub fn start_wow() -> [f32; 3] {
     static S: std::sync::OnceLock<[f32; 3]> = std::sync::OnceLock::new();
     *S.get_or_init(|| {
@@ -41,6 +43,17 @@ pub fn start_wow() -> [f32; 3] {
                 let (x, y) = v.split_once(',')?;
                 let d = terrain::data()?;
                 Some(benilla_assets::coords::bevy_to_wow(d.to_world(x.trim().parse().ok()?, y.trim().parse().ok()?)))
+            })
+            .or_else(|| {
+                let [x, y] = save::saved_pos()?;
+                let d = terrain::data()?;
+                let m = Vec2::new(x, y);
+                let inside = (4.0..terrain::MAP_W - 4.0).contains(&x) && (4.0..terrain::MAP_H - 4.0).contains(&y);
+                if !inside || d.is_water(m) || d.blocked(m) {
+                    info!("save: kayıttaki konum ({x:.0}, {y:.0}) uygun değil, köy meydanında başlanıyor");
+                    return None;
+                }
+                Some(benilla_assets::coords::bevy_to_wow(d.to_world(x, y)))
             })
             .unwrap_or_else(|| match terrain::data() {
                 // Pyungmoo: köy meydanı (wiki koordinatı 382, 655).
@@ -76,6 +89,7 @@ impl Plugin for GamePlugin {
             ui::plugin,
             skills::plugin,
             quest::plugin,
+            save::plugin,
         ))
         .init_resource::<inventory::Inventory>()
         .add_systems(Update, (snap_to_ground, mobs::heal_returning, npc::auto_close));

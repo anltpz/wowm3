@@ -21,6 +21,8 @@ pub enum Cell {
 }
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
+/// Kayıtta eksik alanlar varsayılandan gelir (eski save.ron uyumu).
+#[serde(default)]
 pub struct Inventory {
     pub cells: Vec<Cell>,
     pub equip: [Option<Item>; 8],
