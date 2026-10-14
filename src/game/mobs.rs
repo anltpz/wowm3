@@ -697,6 +697,13 @@ fn place_packs(
             spawn_mob(&mut commands, &server, wa, &mut images, db.as_deref(), def, at, Some(pack), false);
         }
     }
+    // Bu karede bakılıp yerleşemeyen satırları (alanı henüz akmamış, uzak) sona al: bir sonraki karede sıradaki
+    // satırlar denenir. Yoksa liste başındaki 24 uzak satır (ör. Westfall'dayken Elwynn'in doğusu) bütün
+    // bölgeleri tıkardı.
+    let n = sp.pending.len();
+    if n > 0 {
+        sp.pending.rotate_left(i % n);
+    }
 }
 
 fn respawn_packs(
