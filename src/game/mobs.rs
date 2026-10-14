@@ -27,6 +27,20 @@ pub enum Species {
     Gnoll,
     /// İri gnoll (Hogger): GnollMelee modeli.
     GnollBrute,
+    /// Başka dosyalarda tanımlanan türler (Westfall, zindanlar): model ve gövde `MobDef::body`'den gelir
+    /// (`with_body` ile verilmesi şart; test denetler).
+    #[allow(dead_code)]
+    Other,
+}
+
+/// Türden bağımsız model + çarpışma gövdesi (dış tablolar için). `skin` yine `MobDef::skin`'den gelir.
+#[derive(Clone, Copy, Debug)]
+pub struct MobBody {
+    /// M2 yolu, ör. "Creature/HarvestGolem/HarvestGolem.m2".
+    pub model: &'static str,
+    /// Hedef/çarpışma yarıçapı ve boyu (ölçek uygulanmadan).
+    pub radius: f32,
+    pub height: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -50,6 +64,10 @@ pub struct MobDef {
     pub boss: bool,
     /// İnsan türleri için zırh seti ve silah görünümü.
     pub gear: Option<(super::character::ArmorSet, u32)>,
+    /// Türün model/gövde verisinin yerine geçer (None → `species`'e göre).
+    pub body: Option<MobBody>,
+    /// Türe özgü düşürmelerin yerine geçer: (vnum, şans). None → `species`'e göre.
+    pub loot: Option<&'static [(u32, f32)]>,
 }
 
 use super::items::{
@@ -59,6 +77,9 @@ use super::items::{
 
 impl MobDef {
     pub fn model(&self) -> &'static str {
+        if let Some(b) = self.body {
+            return b.model;
+        }
         match self.species {
             Species::Dog | Species::Wolf => "Creature/Wolf/Wolf.m2",
             Species::Boar => "Creature/Boar/Boar.m2",
@@ -70,10 +91,34 @@ impl MobDef {
             Species::Spider => "Creature/MineSpider/MineSpider.m2",
             Species::Gnoll => "Creature/Gnoll/gnoll.m2",
             Species::GnollBrute => "Creature/GnollMelee/GnollMelee.m2",
+            // `body` verilmemiş dış tür: görünür bir yedek.
+            Species::Other => "Creature/Wolf/Wolf.m2",
+        }
+    }
+    /// Hedef/çarpışma gövdesi (yarıçap, boy), ölçeksiz.
+    pub fn collision(&self) -> (f32, f32) {
+        if let Some(b) = self.body {
+            return (b.radius, b.height);
+        }
+        match self.species {
+            Species::Dog | Species::Wolf => (0.6, 1.3),
+            Species::Boar => (0.6, 1.2),
+            Species::Bear => (0.9, 1.9),
+            Species::Tiger => (0.7, 1.3),
+            Species::Human => (0.45, 1.9),
+            Species::Kobold => (0.45, 1.4),
+            Species::Murloc => (0.45, 1.4),
+            Species::Spider => (0.8, 1.0),
+            Species::Gnoll => (0.5, 1.9),
+            Species::GnollBrute => (0.6, 2.3),
+            Species::Other => (0.6, 1.5),
         }
     }
     /// Türe özgü düşürmeler (WoW ikonlu Metin2 malzemeleri): (vnum, şans).
     pub fn drops(&self) -> &'static [(u32, f32)] {
+        if let Some(l) = self.loot {
+            return l;
+        }
         match self.species {
             Species::Dog => &[(V_WOLF_CLAW, 0.25)],
             Species::Wolf => &[(V_WOLF_CLAW, 0.35), (V_WOLF_PELT, 0.25)],
@@ -85,6 +130,7 @@ impl MobDef {
             Species::Murloc => &[(V_MURLOC_FIN, 0.35), (V_LINEN, 0.2)],
             Species::Spider => &[(V_SPIDER_LEG, 0.4)],
             Species::Gnoll | Species::GnollBrute => &[(V_GNOLL_PAW, 0.35), (V_LINEN, 0.3)],
+            Species::Other => &[(V_LINEN, 0.3)],
         }
     }
 }
@@ -100,7 +146,8 @@ const fn atk_of(l: u32) -> i32 {
     (8 + l * 4) as i32
 }
 
-const fn m(
+/// Mob tanımı kurucusu (seviyeden HP/saldırı/EXP). Dış tablolar (westfall.rs, dungeon/) da kullanır.
+pub(crate) const fn m(
     id: u32,
     name: &'static str,
     species: Species,
@@ -132,10 +179,12 @@ const fn m(
         tint,
         boss: false,
         gear: None,
+        body: None,
+        loot: None,
     }
 }
 
-const fn boss(mut d: MobDef, mult: i32) -> MobDef {
+pub(crate) const fn boss(mut d: MobDef, mult: i32) -> MobDef {
     d.boss = true;
     d.hp *= mult;
     d.atk = d.atk * 3 / 2;
@@ -144,52 +193,66 @@ const fn boss(mut d: MobDef, mult: i32) -> MobDef {
     d
 }
 
-const fn human(mut d: MobDef, set: super::character::ArmorSet, weapon: u32) -> MobDef {
+pub(crate) const fn human(mut d: MobDef, set: super::character::ArmorSet, weapon: u32) -> MobDef {
     d.gear = Some((set, weapon));
     d
 }
 
-const W: [f32; 3] = [1.0, 1.0, 1.0];
-const HUNGRY: [f32; 3] = [0.9, 0.85, 0.85];
-const BLUE: [f32; 3] = [0.65, 0.8, 1.35];
-const GREY: [f32; 3] = [1.55, 1.55, 1.6];
-const CURSED: [f32; 3] = [1.15, 0.55, 1.35];
-const WOLF_T: &str = "Creature/Wolf/WolfSkinTimber.blp";
-const WOLF_TA: &str = "Creature/Wolf/WolfSkinTimberAlpha.blp";
-const WOLF_A: &str = "Creature/Wolf/WolfSkinArctic.blp";
-const WOLF_AA: &str = "Creature/Wolf/WolfSkinArcticAlpha.blp";
-const WOLF_B: &str = "Creature/Wolf/WolfSkinBlack.blp";
-const WOLF_BA: &str = "Creature/Wolf/WolfSkinBlackAlpha.blp";
-const COYOTE: &str = "Creature/Wolf/WolfSkinCoyote.blp";
-const BOAR_B: &str = "Creature/Boar/BoarSkinBrown.blp";
-const BOAR_R: &str = "Creature/Boar/BoarSkinCrimson.blp";
-const BOAR_ARM: &str = "Creature/Boar/BoarSkinBrownArmored.blp";
-const BEAR_BR: &str = "Creature/bear/BearSkinBrown.blp";
-const BEAR_DB: &str = "Creature/bear/BearSkinDrkBrown.blp";
-const BEAR_BL: &str = "Creature/bear/BearSkinBlack.blp";
-const TIGER_Y: &str = "Creature/Tiger/TigerSkinYellow.blp";
-const TIGER_W: &str = "Creature/Tiger/TigerSkinWhite.blp";
-const TIGER_BS: &str = "Creature/Tiger/TigerSkinBlackStriped.blp";
+/// Türden bağımsız model/gövde verir (`Species::Other` için şart, diğer türlerde modeli değiştirir).
+#[allow(dead_code)]
+pub(crate) const fn with_body(mut d: MobDef, model: &'static str, radius: f32, height: f32) -> MobDef {
+    d.body = Some(MobBody { model, radius, height });
+    d
+}
 
-const WOLF_D: &str = "Creature/Wolf/WolfSkinDiseased.blp";
-const BOAR_I: &str = "Creature/Boar/BoarSkinIvory.blp";
-const KOBOLD: &str = "Creature/Kobold/koboldskinNormal.blp";
-const KOBOLD_A: &str = "Creature/Kobold/koboldskinAlbino.blp";
-const MURLOC: &str = "Creature/Murloc/Sahauginskin.blp";
-const MURLOC_B: &str = "Creature/Murloc/SahauginskinBlue.blp";
-const SPIDER_G: &str = "Creature/MineSpider/MineSpiderSkinGreen.blp";
-const SPIDER_B: &str = "Creature/MineSpider/MineSpiderSkinBlood.blp";
-const GNOLL_RP: &str = "Creature/Gnoll/RiverPawGnollWhelpSkin.blp";
-const GNOLL_HOGGER: &str = "Creature/GnollMelee/RiverPawGnollFighterSkin.blp";
+/// Türe özgü düşürmeleri değiştirir.
+#[allow(dead_code)]
+pub(crate) const fn with_loot(mut d: MobDef, loot: &'static [(u32, f32)]) -> MobDef {
+    d.loot = Some(loot);
+    d
+}
 
-type Set = super::character::ArmorSet;
+pub(crate) const W: [f32; 3] = [1.0, 1.0, 1.0];
+pub(crate) const HUNGRY: [f32; 3] = [0.9, 0.85, 0.85];
+pub(crate) const BLUE: [f32; 3] = [0.65, 0.8, 1.35];
+pub(crate) const GREY: [f32; 3] = [1.55, 1.55, 1.6];
+pub(crate) const CURSED: [f32; 3] = [1.15, 0.55, 1.35];
+pub(crate) const WOLF_T: &str = "Creature/Wolf/WolfSkinTimber.blp";
+pub(crate) const WOLF_TA: &str = "Creature/Wolf/WolfSkinTimberAlpha.blp";
+pub(crate) const WOLF_A: &str = "Creature/Wolf/WolfSkinArctic.blp";
+pub(crate) const WOLF_AA: &str = "Creature/Wolf/WolfSkinArcticAlpha.blp";
+pub(crate) const WOLF_B: &str = "Creature/Wolf/WolfSkinBlack.blp";
+pub(crate) const WOLF_BA: &str = "Creature/Wolf/WolfSkinBlackAlpha.blp";
+pub(crate) const COYOTE: &str = "Creature/Wolf/WolfSkinCoyote.blp";
+pub(crate) const BOAR_B: &str = "Creature/Boar/BoarSkinBrown.blp";
+pub(crate) const BOAR_R: &str = "Creature/Boar/BoarSkinCrimson.blp";
+pub(crate) const BOAR_ARM: &str = "Creature/Boar/BoarSkinBrownArmored.blp";
+pub(crate) const BEAR_BR: &str = "Creature/bear/BearSkinBrown.blp";
+pub(crate) const BEAR_DB: &str = "Creature/bear/BearSkinDrkBrown.blp";
+pub(crate) const BEAR_BL: &str = "Creature/bear/BearSkinBlack.blp";
+pub(crate) const TIGER_Y: &str = "Creature/Tiger/TigerSkinYellow.blp";
+pub(crate) const TIGER_W: &str = "Creature/Tiger/TigerSkinWhite.blp";
+pub(crate) const TIGER_BS: &str = "Creature/Tiger/TigerSkinBlackStriped.blp";
+
+pub(crate) const WOLF_D: &str = "Creature/Wolf/WolfSkinDiseased.blp";
+pub(crate) const BOAR_I: &str = "Creature/Boar/BoarSkinIvory.blp";
+pub(crate) const KOBOLD: &str = "Creature/Kobold/koboldskinNormal.blp";
+pub(crate) const KOBOLD_A: &str = "Creature/Kobold/koboldskinAlbino.blp";
+pub(crate) const MURLOC: &str = "Creature/Murloc/Sahauginskin.blp";
+pub(crate) const MURLOC_B: &str = "Creature/Murloc/SahauginskinBlue.blp";
+pub(crate) const SPIDER_G: &str = "Creature/MineSpider/MineSpiderSkinGreen.blp";
+pub(crate) const SPIDER_B: &str = "Creature/MineSpider/MineSpiderSkinBlood.blp";
+pub(crate) const GNOLL_RP: &str = "Creature/Gnoll/RiverPawGnollWhelpSkin.blp";
+pub(crate) const GNOLL_HOGGER: &str = "Creature/GnollMelee/RiverPawGnollFighterSkin.blp";
+
+pub(crate) type Set = super::character::ArmorSet;
 /// Defias deri takımı (Leather_A_03DefiasBrown: göğüs, kemer, pantolon, çizme).
-const DEFIAS: Set = [None, Some(8550), Some(8551), Some(8552), Some(8553), None, None, None];
+pub(crate) const DEFIAS: Set = [None, Some(8550), Some(8551), Some(8552), Some(8553), None, None, None];
 /// Beyaz Yeminli zırh setleri (gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard).
-const OATH_SOLDIER: Set = [None, Some(16184), Some(3418), Some(3414), Some(25828), Some(4448), Some(25831), None];
-const OATH_ARCHER: Set = [None, Some(2183), None, Some(1882), Some(2198), None, None, None];
-const OATH_CMD: Set = [None, Some(29958), Some(29959), Some(29963), Some(29960), Some(29961), Some(29962), None];
-const OATH_GEN: Set = [None, Some(33628), Some(33632), Some(33630), Some(33631), Some(33627), Some(33629), None];
+pub(crate) const OATH_SOLDIER: Set = [None, Some(16184), Some(3418), Some(3414), Some(25828), Some(4448), Some(25831), None];
+pub(crate) const OATH_ARCHER: Set = [None, Some(2183), None, Some(1882), Some(2198), None, None, None];
+pub(crate) const OATH_CMD: Set = [None, Some(29958), Some(29959), Some(29963), Some(29960), Some(29961), Some(29962), None];
+pub(crate) const OATH_GEN: Set = [None, Some(33628), Some(33632), Some(33630), Some(33631), Some(33627), Some(33629), None];
 
 /// Pyungmoo canavarları (tr-wiki.metin2.gameforge.com/index.php/Pyungmoo), seviyeler wiki'den.
 pub const MOBS: &[MobDef] = &[
@@ -267,8 +330,26 @@ pub const MOBS: &[MobDef] = &[
     boss(m(225, "Mother Fang", Species::Spider, SPIDER_B, 1.4, 10, true, W), 6),
 ];
 
+/// Bütün mob tabloları: Pyungmoo + Elwynn (`MOBS`), Westfall, zindanlar. Tablolar kendi dosyalarında
+/// (`westfall::MOBS`, `dungeon::spider::MOBS`, `dungeon::tower::MOBS`); yeni tablo = buraya bir satır.
+pub const MOB_TABLES: &[&[MobDef]] = &[
+    MOBS,
+    super::westfall::MOBS,
+    super::dungeon::spider::MOBS,
+    super::dungeon::tower::MOBS,
+];
+
+/// Kayıtlı bütün mob tanımları.
+pub fn all_mobs() -> impl Iterator<Item = &'static MobDef> {
+    MOB_TABLES.iter().flat_map(|t| t.iter())
+}
+
+pub fn find(id: u32) -> Option<&'static MobDef> {
+    all_mobs().find(|m| m.id == id)
+}
+
 pub fn mob(id: u32) -> &'static MobDef {
-    MOBS.iter().find(|m| m.id == id).unwrap_or(&MOBS[0])
+    find(id).unwrap_or(&MOBS[0])
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -375,18 +456,7 @@ pub fn spawn_mob(
     };
     wm.tint = Color::linear_rgb(def.tint[0], def.tint[1], def.tint[2]);
     let yaw = rand::rng().random_range(0.0..std::f32::consts::TAU);
-    let (radius, height) = match def.species {
-        Species::Dog | Species::Wolf => (0.6, 1.3),
-        Species::Boar => (0.6, 1.2),
-        Species::Bear => (0.9, 1.9),
-        Species::Tiger => (0.7, 1.3),
-        Species::Human => (0.45, 1.9),
-        Species::Kobold => (0.45, 1.4),
-        Species::Murloc => (0.45, 1.4),
-        Species::Spider => (0.8, 1.0),
-        Species::Gnoll => (0.5, 1.9),
-        Species::GnollBrute => (0.6, 2.3),
-    };
+    let (radius, height) = def.collision();
     let mut e = commands.spawn((
         wm,
         AnimState::default(),
@@ -588,7 +658,7 @@ fn place_packs(
     let mut rng = rand::rng();
     if !sp.init {
         sp.init = true;
-        for (kinds, x, y, z, r, n, lo, hi) in super::elwynn::SPAWNS {
+        for (kinds, x, y, z, r, n, lo, hi) in super::zones::spawns() {
             for i in 0..*n {
                 let k = kinds[i % kinds.len()];
                 sp.pending.push((k, rng.random_range(*lo..=*hi), [*x, *y, *z], *r));
@@ -807,5 +877,37 @@ pub fn heal_returning(mut q: Query<(&Mob, &mut Health)>) {
         if matches!(m.ai, Ai::Return | Ai::Idle { .. }) && !m.aggro {
             hp.hp = hp.max;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mob_ids_unique_across_tables() {
+        let mut seen = std::collections::HashSet::new();
+        for d in all_mobs() {
+            assert!(seen.insert(d.id), "yinelenen mob kimliği {}", d.id);
+        }
+        assert_eq!(seen.len(), MOB_TABLES.iter().map(|t| t.len()).sum::<usize>());
+    }
+
+    #[test]
+    fn other_species_have_body_and_lookup_works() {
+        for d in all_mobs() {
+            assert!(d.species != Species::Other || d.body.is_some(), "{}: Species::Other için with_body gerekli", d.name);
+            assert_eq!(mob(d.id).name, d.name);
+        }
+        // Bilinmeyen kimlik eski davranışla ilk moba düşer.
+        assert_eq!(mob(9_999_999).id, MOBS[0].id);
+        // Dış gövde verisi türün yerine geçer.
+        let d = with_loot(with_body(m(1, "x", Species::Other, "", 1.0, 1, false, W), "Creature/A/A.m2", 1.1, 2.2), &[(1, 0.5)]);
+        assert_eq!(d.model(), "Creature/A/A.m2");
+        assert_eq!(d.collision(), (1.1, 2.2));
+        assert_eq!(d.drops(), &[(1, 0.5)]);
+        // Eski türler değişmedi.
+        assert_eq!(mob(224).collision(), (0.6, 2.3));
+        assert_eq!(mob(224).model(), "Creature/GnollMelee/GnollMelee.m2");
     }
 }

@@ -1,18 +1,43 @@
 //! Basit karakter hareketi: dünyaya karşı yatay kayma (ağaç gövdesi, duvar) ve zemine oturtma.
 //! Pyungmoo açıkken zemin, su, yamaç ve bina engeli arazi verisinden gelir.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use avian3d::prelude::Collider;
 use bevy::prelude::*;
 use benilla_world::collision::WorldCollision;
 
+/// Oyuncu kapalı mekânda (zindan instance'ı) mı. true iken Pyungmoo arazi kısa yolu ve `ground_at`'taki
+/// +60 m yedek ışın kapalıdır (tavana/üst kata ışınlanmayı önler); yalnızca dünya çarpışması kullanılır.
+/// Zindan sistemi girişte true, çıkışta false yapar. Varsayılan false: davranış eskisiyle aynı.
+pub static INDOOR: AtomicBool = AtomicBool::new(false);
+
+/// `INDOOR` bayrağını okur.
+pub fn indoor() -> bool {
+    INDOOR.load(Ordering::Relaxed)
+}
+
+/// `INDOOR` bayrağını yazar.
+#[allow(dead_code)]
+pub fn set_indoor(on: bool) {
+    INDOOR.store(on, Ordering::Relaxed);
+}
+
 /// Zemin yüksekliği: Pyungmoo arazisi, yoksa dizden aşağı ışın (ağaç tepesine ışınlanmayı önler).
 pub fn ground_at(col: &WorldCollision, at: Vec3) -> Option<f32> {
-    if let Some(d) = super::terrain::data() {
-        return d.ground(at);
+    let indoor = indoor();
+    if !indoor {
+        if let Some(d) = super::terrain::data() {
+            return d.ground(at);
+        }
     }
     let near = Vec3::new(at.x, at.y + 1.6, at.z);
     if let Some(h) = col.ray_body(near, Dir3::NEG_Y, 60.0) {
         return Some(near.y - h.distance);
+    }
+    // İçeride üstten yedek ışın yok: tavan/üst kat zemini sanılır.
+    if indoor {
+        return None;
     }
     let far = Vec3::new(at.x, at.y + 60.0, at.z);
     col.ray_body(far, Dir3::NEG_Y, 200.0)
@@ -84,8 +109,10 @@ fn terrain_step(d: &super::terrain::TerrainData, pos: Vec3, delta: Vec3) -> Vec3
 
 /// Yürüyen bir gövdeyi ilerletir: kayma + basamak/yokuş sınırı + zemine oturtma.
 pub fn walk(col: &WorldCollision, pos: Vec3, delta: Vec3, radius: f32) -> Vec3 {
-    if let Some(d) = super::terrain::data() {
-        return terrain_step(d, pos, delta);
+    if !indoor() {
+        if let Some(d) = super::terrain::data() {
+            return terrain_step(d, pos, delta);
+        }
     }
     let next = slide(col, pos, delta, radius);
     match ground_at(col, next) {
