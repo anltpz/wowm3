@@ -47,18 +47,23 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, ring_follow);
 }
 
+/// WoW hedef dairesi (Interface/SelectionCircle/Selection_SelectionA.blp), düşmanda kırmızı.
+const SELECTION_CIRCLE: &str = "Interface/SelectionCircle/Selection_SelectionA.blp";
+
 fn spawn_ring(
     mut commands: Commands,
+    server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut mats: ResMut<Assets<StandardMaterial>>,
 ) {
+    let tex: Handle<Image> = server.load(benilla_assets::texture_url(SELECTION_CIRCLE, (false, false)));
     commands.spawn((
-        Mesh3d(meshes.add(Annulus::new(0.9, 1.05))),
+        Mesh3d(meshes.add(Plane3d::new(Vec3::Z, Vec2::splat(1.0)))),
         MeshMaterial3d(mats.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.25, 0.15, 0.85),
-            emissive: LinearRgba::rgb(1.2, 0.2, 0.1),
+            base_color: Color::srgb(1.0, 0.2, 0.15),
+            base_color_texture: Some(tex),
             unlit: true,
-            alpha_mode: AlphaMode::Blend,
+            alpha_mode: AlphaMode::Add,
             double_sided: true,
             cull_mode: None,
             ..default()
@@ -82,8 +87,8 @@ fn ring_follow(
             let r = (en.radius * t.scale.x).max(0.6) + 0.3;
             xf.translation = t.translation + Vec3::Y * 0.08;
             xf.scale = Vec3::splat(r);
-            xf.rotation = Quat::from_rotation_y(time.elapsed_secs() * 0.8)
-                * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+            let _ = &time;
+            xf.rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
         }
         None => *vis = Visibility::Hidden,
     }

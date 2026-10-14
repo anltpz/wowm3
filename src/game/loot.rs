@@ -8,6 +8,7 @@ use super::inventory::Inventory;
 use super::items::{Item, Kind};
 use super::log::{GameLog, C_BAD, C_ITEM};
 use super::metin::DropLoot;
+use super::model::{load_m2, WowModel};
 use super::player::Player;
 use super::stats::PlayerStats;
 
@@ -51,13 +52,12 @@ pub fn item_color(it: &Item) -> Color {
     }
 }
 
+/// Yerdeki ganimet modelleri (WoW doodad'ları).
 #[derive(Resource)]
 struct LootAssets {
-    mesh: Handle<Mesh>,
-    coin: Handle<StandardMaterial>,
-    gear: Handle<StandardMaterial>,
-    misc: Handle<StandardMaterial>,
-    rare: Handle<StandardMaterial>,
+    gold: Handle<benilla_assets::M2Model>,
+    sack: Handle<benilla_assets::M2Model>,
+    chest: Handle<benilla_assets::M2Model>,
 }
 
 pub fn plugin(app: &mut App) {
@@ -65,24 +65,11 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, (spawn_drops, bob, pickup));
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut mats: ResMut<Assets<StandardMaterial>>,
-) {
-    let m = |c: Color, e: LinearRgba| StandardMaterial {
-        base_color: c,
-        emissive: e,
-        perceptual_roughness: 0.4,
-        metallic: 0.6,
-        ..default()
-    };
+fn setup(mut commands: Commands, server: Res<AssetServer>) {
     commands.insert_resource(LootAssets {
-        mesh: meshes.add(Cuboid::new(0.28, 0.28, 0.28)),
-        coin: mats.add(m(Color::srgb(1.0, 0.8, 0.2), LinearRgba::rgb(0.8, 0.5, 0.0))),
-        gear: mats.add(m(Color::srgb(0.85, 0.85, 0.95), LinearRgba::rgb(0.3, 0.3, 0.4))),
-        misc: mats.add(m(Color::srgb(0.5, 1.0, 0.5), LinearRgba::rgb(0.1, 0.5, 0.1))),
-        rare: mats.add(m(Color::srgb(1.0, 0.5, 0.2), LinearRgba::rgb(1.5, 0.5, 0.0))),
+        gold: load_m2(&server, "World/Generic/PassiveDoodads/TreasurePiles/GoldPilesmall01.m2"),
+        sack: load_m2(&server, "World/Generic/PassiveDoodads/Furniture/Containers/Sack01.m2"),
+        chest: load_m2(&server, "World/SkillActivated/Containers/TreasureChest01.m2"),
     });
 }
 
@@ -102,24 +89,24 @@ fn spawn_drops(
             if let Some(g) = super::physics::ground_at(&col, p) {
                 p.y = g;
             }
-            let mat = match item {
-                None => a.coin.clone(),
-                Some(it) if it.plus >= 3 || matches!(it.def().kind, Kind::DragonScale) => {
-                    a.rare.clone()
-                }
-                Some(it) if it.def().upgradable() => a.gear.clone(),
-                Some(_) => a.misc.clone(),
+            // Yang: altın yığını, nadir: hazine sandığı, diğerleri: çuval.
+            let (model, scale) = match item {
+                None => (a.gold.clone(), 0.6),
+                Some(it) if it.plus >= 3 || matches!(it.def().kind, Kind::DragonScale) => (a.chest.clone(), 0.35),
+                Some(_) => (a.sack.clone(), 0.45),
             };
+            let mut wm = WowModel::new(model);
+            wm.shared = true;
             commands.spawn((
                 GroundItem {
                     item,
                     yang,
                     age: 0.0,
-                    base_y: p.y + 0.25,
+                    base_y: p.y,
                 },
-                Mesh3d(a.mesh.clone()),
-                MeshMaterial3d(mat),
-                Transform::from_translation(p + Vec3::Y * 0.25),
+                wm,
+                Transform::from_translation(p).with_scale(Vec3::splat(scale)),
+                Visibility::default(),
             ));
         };
         if d.yang > 0 {
@@ -134,8 +121,7 @@ fn spawn_drops(
 fn bob(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut GroundItem, &mut Transform)>) {
     for (e, mut g, mut xf) in &mut q {
         g.age += time.delta_secs();
-        xf.translation.y = g.base_y + (g.age * 2.5).sin() * 0.06;
-        xf.rotate_y(time.delta_secs() * 1.5);
+        xf.translation.y = g.base_y;
         if g.age > 120.0 {
             commands.entity(e).despawn();
         }
