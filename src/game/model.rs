@@ -35,6 +35,8 @@ pub mod anim {
     pub const BATTLE_ROAR: u16 = 55;
     /// Binek üstünde oturma.
     pub const MOUNT: u16 = 91;
+    pub const WALK_BACK: u16 = 13;
+    pub const JUMP: u16 = 38;
 }
 
 /// Bir M2 örneği: model + doku seçimi. Yüklenince `ModelReady` eklenir.
@@ -387,6 +389,8 @@ fn fallback(id: u16) -> &'static [u16] {
         anim::BATTLE_ROAR => &[anim::BATTLE_ROAR, anim::SPELL_OMNI, anim::SPELL_CAST_AREA],
         anim::COMBAT_WOUND => &[anim::COMBAT_WOUND],
         anim::MOUNT => &[anim::MOUNT, anim::STAND],
+        anim::WALK_BACK => &[anim::WALK_BACK, anim::WALK, anim::RUN],
+        anim::JUMP => &[anim::JUMP, anim::STAND],
         _ => &[],
     }
 }

@@ -112,8 +112,14 @@ fn update_hover(
         .any(|(r, v)| v.get() && r.cursor_over());
 }
 
-fn toggle_windows(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Windows>) {
-    if keys.just_pressed(KeyCode::KeyI) || keys.just_pressed(KeyCode::Tab) {
+fn toggle_windows(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut w: ResMut<Windows>,
+    mut target: ResMut<crate::game::combat::PlayerTarget>,
+    mut auto: ResMut<crate::game::combat::AutoAttack>,
+) {
+    // WoW: B çantalar (I de çalışır); Tab hedef seçmeye ayrıldı.
+    if keys.just_pressed(KeyCode::KeyB) || keys.just_pressed(KeyCode::KeyI) {
         w.inventory = !w.inventory;
     }
     if keys.just_pressed(KeyCode::KeyH) {
@@ -123,9 +129,13 @@ fn toggle_windows(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Windows>) {
         if w.upgrade || w.shop {
             w.upgrade = false;
             w.shop = false;
-        } else {
+        } else if w.inventory || w.help {
             w.inventory = false;
             w.help = false;
+        } else {
+            // WoW: açık pencere yoksa Esc hedefi bırakır.
+            target.0 = None;
+            auto.0 = false;
         }
     }
 }

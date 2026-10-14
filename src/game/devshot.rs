@@ -56,6 +56,7 @@ fn autopilot(
     enemies: Query<(Entity, &Transform, &super::combat::Enemy), Without<super::combat::Dying>>,
     mut cast: MessageWriter<super::skills::CastSkill>,
     mut stats: ResMut<super::stats::PlayerStats>,
+    (mut auto, mut move_to): (ResMut<super::combat::AutoAttack>, ResMut<super::combat::MoveTo>),
     mut acc: Local<f32>,
     mut k: Local<usize>,
 ) {
@@ -75,6 +76,11 @@ fn autopilot(
             .filter(|(_, xf, _)| xf.translation.distance(p.translation) < 60.0)
             .min_by(|a, b| a.1.translation.distance(p.translation).total_cmp(&b.1.translation.distance(p.translation)))
             .map(|(e, _, _)| e);
+    }
+    // WoW kontrolleri tıkla-yürü yapmaz: otopilot hedefe kendisi yürür ve saldırıyı açar.
+    if let Some((_, txf, _)) = target.0.and_then(|t| enemies.get(t).ok()) {
+        auto.0 = true;
+        move_to.0 = (txf.translation.distance(p.translation) > 2.5).then_some(txf.translation);
     }
     if target.0.is_some() {
         cast.write(super::skills::CastSkill(*k % 4));

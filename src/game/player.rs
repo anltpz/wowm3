@@ -15,6 +15,11 @@ pub struct Player {
     pub speed: f32,
     pub grounded: bool,
     pub moving: bool,
+    /// Geri geri yürüyor (WoW: yavaş, geri yürüme animasyonu).
+    pub backward: bool,
+    /// Zıplamada (dikey hız `vy`).
+    pub airborne: bool,
+    pub vy: f32,
 }
 
 /// Oyuncunun giydiği görünüm; `dirty` olunca gövde yeniden kurulur.
@@ -75,6 +80,9 @@ fn spawn_player(mut commands: Commands) {
             speed: 7.0,
             grounded: false,
             moving: false,
+            backward: false,
+            airborne: false,
+            vy: 0.0,
         },
         Transform::from_translation(start),
         Visibility::default(),
@@ -177,14 +185,13 @@ pub fn ground_at(collision: &benilla_world::collision::WorldCollision, at: Vec3)
 
 pub fn move_player(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
-    cam: Query<&OrbitCam>,
+    (keys, buttons, ui): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<super::combat::UiHover>),
+    mut cam: Query<&mut OrbitCam>,
     mut player: Query<(&mut Transform, &mut Player)>,
     collision: benilla_world::collision::WorldCollision,
     mut focus: ResMut<ViewFocus>,
     mut move_to: ResMut<super::combat::MoveTo>,
-    target: Res<super::combat::PlayerTarget>,
-    enemies: Query<(&Transform, &super::combat::Enemy), Without<Player>>,
+    mut autorun: Local<bool>,
     derived: Res<super::stats::Derived>,
     mut stats: ResMut<super::stats::PlayerStats>,
     mut body: Query<&mut AnimState, With<Body>>,
@@ -204,6 +211,8 @@ pub fn move_player(
             stats.last_hurt = time.elapsed_secs();
             xf.translation = wow_to_bevy(super::village_wow());
             p.grounded = false;
+            p.airborne = false;
+            p.vy = 0.0;
             if let Ok(mut st) = body.single_mut() {
                 *st = AnimState::default();
             }
@@ -211,63 +220,109 @@ pub fn move_player(
         }
         return;
     }
-    let yaw = cam.single().map(|c| c.yaw).unwrap_or(0.0);
-    let fwd = Quat::from_rotation_y(yaw) * Vec3::NEG_Z;
-    let right = Quat::from_rotation_y(yaw) * Vec3::X;
-    let mut dir = Vec3::ZERO;
-    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
-        dir += fwd;
+    // --- WoW kontrolleri ---
+    // W/S ileri-geri, A/D dön (sağ tık basılıyken yan adım), Q/E yan adım, iki fare tuşu = ileri,
+    // Num Lock otomatik koşu, Space zıpla. Karakter her zaman kendi yönüne bakar; geri yavaş yürür.
+    let (lmb, rmb) = (buttons.pressed(MouseButton::Left) && !ui.0, buttons.pressed(MouseButton::Right) && !ui.0);
+    let key = |a: KeyCode, b: KeyCode| keys.pressed(a) || keys.pressed(b);
+    if keys.just_pressed(KeyCode::NumLock) {
+        *autorun = !*autorun;
     }
-    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
-        dir -= fwd;
+    let mut fwd_in = 0.0f32;
+    if key(KeyCode::KeyW, KeyCode::ArrowUp) || (lmb && rmb) || *autorun {
+        fwd_in += 1.0;
     }
-    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
-        dir -= right;
+    if key(KeyCode::KeyS, KeyCode::ArrowDown) {
+        fwd_in -= 1.0;
+        *autorun = false;
     }
-    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
-        dir += right;
+    let mut strafe = 0.0f32;
+    let mut turn = 0.0f32;
+    if keys.pressed(KeyCode::KeyQ) {
+        strafe -= 1.0;
     }
-    if dir != Vec3::ZERO {
-        // Klavye tıkla-yürüyü iptal eder.
-        move_to.0 = None;
-    } else if let Some(t) = target.0.and_then(|t| enemies.get(t).ok()) {
-        // Hedefe yaklaş (menzile girince saldırı sistemi devralır).
-        let (txf, en) = t;
-        let to = txf.translation - xf.translation;
-        let flat = Vec3::new(to.x, 0.0, to.z);
-        if flat.length() > super::combat::reach(en, txf.scale.x) {
-            dir = flat.normalize_or_zero();
+    if keys.pressed(KeyCode::KeyE) {
+        strafe += 1.0;
+    }
+    let (left, right) = (key(KeyCode::KeyA, KeyCode::ArrowLeft), key(KeyCode::KeyD, KeyCode::ArrowRight));
+    if rmb {
+        strafe += right as i32 as f32 - left as i32 as f32;
+    } else {
+        turn += left as i32 as f32 - right as i32 as f32;
+    }
+    let mut yaw = yaw_of(xf.rotation);
+    if turn != 0.0 {
+        yaw += turn * TURN_RATE * dt;
+        // Klavyeyle dönünce kamera da döner (sol tıkla serbest bakış hariç).
+        if let Ok(mut c) = cam.single_mut() {
+            if !lmb {
+                c.yaw += turn * TURN_RATE * dt;
+            }
         }
+    }
+    xf.rotation = Quat::from_rotation_y(yaw);
+    let (fwd, side) = (xf.rotation * Vec3::NEG_Z, xf.rotation * Vec3::X);
+    let mut dir = fwd * fwd_in.clamp(-1.0, 1.0) + side * strafe.clamp(-1.0, 1.0);
+    let manual = dir != Vec3::ZERO;
+    if manual {
+        move_to.0 = None;
     } else if let Some(goal) = move_to.0 {
-        let to = goal - xf.translation;
-        let flat = Vec3::new(to.x, 0.0, to.z);
+        // Betikli yürüme (test otopilotu).
+        let flat = Vec3::new(goal.x - xf.translation.x, 0.0, goal.z - xf.translation.z);
         if flat.length() < 0.4 {
             move_to.0 = None;
         } else {
             dir = flat.normalize_or_zero();
+            xf.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, dir);
         }
     }
-    // Saldırı animasyonu sırasında yerinde dur (Metin2 kombo hissi).
-    let attacking = body.single().map(|b| b.busy()).unwrap_or(false);
-    p.moving = dir != Vec3::ZERO && !attacking;
+    p.backward = manual && fwd_in < 0.0;
+    p.moving = dir != Vec3::ZERO;
     if p.moving {
-        let dir = dir.normalize();
+        // Geri yürüme WoW'daki gibi yavaş (4.5 / 7).
+        let speed = if p.backward { p.speed * BACK_MUL } else { p.speed };
         let before = xf.translation;
-        xf.translation = super::physics::walk(&collision, before, dir * p.speed * dt, 0.35);
-        let target_rot = Quat::from_rotation_arc(Vec3::NEG_Z, dir);
-        xf.rotation = xf.rotation.slerp(target_rot, (dt * 14.0).min(1.0));
-        // Takıldıysa tıkla-yürüyü bırak.
-        if move_to.0.is_some() && xf.translation.distance(before) < p.speed * dt * 0.1 {
+        xf.translation = super::physics::walk(&collision, before, dir.normalize() * speed * dt, 0.35);
+        if move_to.0.is_some() && xf.translation.distance(before) < speed * dt * 0.1 {
             move_to.0 = None;
         }
     }
-    if let Some(g) = ground_at(&collision, xf.translation) {
+    // Zıplama + yerçekimi.
+    if keys.just_pressed(KeyCode::Space) && p.grounded && !p.airborne {
+        p.vy = JUMP_SPEED;
+        p.airborne = true;
+    }
+    let ground = ground_at(&collision, xf.translation);
+    if p.airborne {
+        p.vy -= GRAVITY * dt;
+        xf.translation.y += p.vy * dt;
+        if let Some(g) = ground {
+            if xf.translation.y <= g && p.vy <= 0.0 {
+                xf.translation.y = g;
+                p.airborne = false;
+                p.vy = 0.0;
+            }
+        }
+    } else if let Some(g) = ground {
         if !p.grounded || (g - xf.translation.y).abs() < 3.0 {
             xf.translation.y = g;
             p.grounded = true;
         }
     }
     *focus = ViewFocus::body(bevy_to_wow(xf.translation), p.grounded);
+}
+
+/// Klavyeyle dönüş hızı (rad/sn, WoW ≈ 180°/sn).
+const TURN_RATE: f32 = std::f32::consts::PI;
+/// Geri yürüme hız çarpanı.
+const BACK_MUL: f32 = 0.64;
+const JUMP_SPEED: f32 = 7.5;
+const GRAVITY: f32 = 22.0;
+
+/// Dönüşün Y ekseni açısı (modeller -Z'ye bakar).
+pub fn yaw_of(q: Quat) -> f32 {
+    let f = q * Vec3::NEG_Z;
+    (-f.x).atan2(-f.z)
 }
 
 fn animate_player(
@@ -284,6 +339,10 @@ fn animate_player(
     }
     let idle = if stats.riding {
         anim::MOUNT
+    } else if p.airborne {
+        anim::JUMP
+    } else if p.moving && p.backward {
+        anim::WALK_BACK
     } else if p.moving {
         anim::RUN
     } else if look.weapon.is_some() {

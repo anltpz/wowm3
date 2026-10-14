@@ -189,6 +189,7 @@ fn cast(
     mut commands: Commands,
     fx: Option<Res<FxAssets>>,
     mut mats: ResMut<Assets<StandardMaterial>>,
+    mut auto: ResMut<super::combat::AutoAttack>,
 ) {
     let now = time.elapsed_secs();
     for CastSkill(i) in ev.read() {
@@ -233,6 +234,10 @@ fn cast(
             charge_target: charge.map(|c| c.0),
         };
         lock.0 = true;
+        // WoW: saldırı becerisi otomatik saldırıyı da başlatır.
+        if target.0.is_some() && def.id != SkillId::Rage {
+            auto.0 = true;
+        }
         if let Ok(mut st) = body.single_mut() {
             match def.id {
                 SkillId::Cleave => {

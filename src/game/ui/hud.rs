@@ -660,14 +660,14 @@ fn build(
         HelpPanel,
         children![
             text(&ui, "Kontroller (H: gizle/göster)", 15.0, GOLD),
-            text(&ui, "WASD / sol tık zemine: yürü", 13.0, TEXT),
-            text(&ui, "Sol tık düşmana: hedefle + otomatik saldır", 13.0, TEXT),
-            text(&ui, "Space: saldır    Z: yerdeki eşyaları topla", 13.0, TEXT),
-            text(&ui, "1-4: beceriler    F1-F4: iksirler", 13.0, TEXT),
-            text(&ui, "Sağ tık sürükle: kamera, tekerlek: yakınlaş", 13.0, TEXT),
-            text(&ui, "I / Tab: envanter (sağ tık: kuşan/kullan)", 13.0, TEXT),
-            text(&ui, "Demirci'ye tıkla: artı basma    Tüccar: alışveriş", 13.0, TEXT),
-            text(&ui, "R: (ölünce) yeniden doğ    Esc: pencereleri kapat", 13.0, TEXT),
+            text(&ui, "W/S: ileri-geri   A/D: dön   Q/E: yan adım   Space: zıpla", 13.0, TEXT),
+            text(&ui, "Sağ tık sürükle: kamera + karakter   Sol tık sürükle: serbest bakış", 13.0, TEXT),
+            text(&ui, "İki fare tuşu: ileri koş   Num Lock: otomatik koşu   Tekerlek: yakınlaş", 13.0, TEXT),
+            text(&ui, "Sol tık: hedefle   Sağ tık düşmana: saldır   Tab: en yakın düşman", 13.0, TEXT),
+            text(&ui, "1-4: beceriler   F1-F4: iksirler   Z: yerdeki eşyaları topla", 13.0, TEXT),
+            text(&ui, "B: çantalar (sağ tık: kuşan/kullan)   Ctrl+G: binek", 13.0, TEXT),
+            text(&ui, "NPC'ye sağ tık: konuş (Demirci: artı basma, Tüccar: alışveriş)", 13.0, TEXT),
+            text(&ui, "R: (ölünce) yeniden doğ   Esc: pencere kapat / hedefi bırak", 13.0, TEXT),
         ],
     ));
 }

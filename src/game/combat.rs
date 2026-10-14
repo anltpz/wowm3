@@ -6,7 +6,7 @@ use bevy::window::PrimaryWindow;
 use rand::Rng;
 
 use super::camera::OrbitCam;
-use super::log::{GameLog, C_EXP, C_GOOD};
+use super::log::{GameLog, C_BAD, C_EXP, C_GOOD};
 use super::model::{anim, AnimState};
 use super::player::{Body, Player};
 use super::stats::{gain_exp, Derived, PlayerStats};
@@ -72,9 +72,13 @@ pub struct FloatText {
 #[derive(Resource, Default)]
 pub struct PlayerTarget(pub Option<Entity>);
 
-/// Tıkla-yürü hedefi.
+/// Betikli yürüme hedefi (yalnızca test otopilotu; oyuncu girdisi WoW gibi tıkla-yürü kullanmaz).
 #[derive(Resource, Default)]
 pub struct MoveTo(pub Option<Vec3>);
+
+/// Otomatik saldırı açık mı (WoW: düşmana sağ tık ya da beceri açar; hedef ölünce / Esc kapanır).
+#[derive(Resource, Default)]
+pub struct AutoAttack(pub bool);
 
 /// Bir beceri oynarken normal saldırıyı durdurur (skills yazar).
 #[derive(Resource, Default)]
@@ -101,13 +105,15 @@ pub fn plugin(app: &mut App) {
         .add_message::<PlayerHurt>()
         .init_resource::<PlayerTarget>()
         .init_resource::<MoveTo>()
+        .init_resource::<AutoAttack>()
+        .init_resource::<Clicks>()
         .init_resource::<UiHover>()
         .init_resource::<SkillLock>()
         .init_resource::<Swing>()
         .add_systems(
             Update,
             (
-                click_select.in_set(CombatInput),
+                (detect_clicks, click_select, tab_target).chain().in_set(CombatInput),
                 attack_input,
                 apply_hits,
                 apply_player_hurt,
@@ -160,18 +166,53 @@ pub fn pick_enemy(
     best.map(|(_, e)| e)
 }
 
-fn click_select(
+/// Bu karede sürüklemeden bırakılan fare tıklamaları (WoW: sürükleme kamerayı döndürür, tık seçer).
+/// Basış bir UI penceresinin üstünde başladıysa tık sayılmaz.
+#[derive(Resource, Default)]
+pub struct Clicks {
+    pub left: bool,
+    pub right: bool,
+}
+
+/// Sürükleme eşiği (piksel): bunun altında kalan bas-bırak tıktır.
+const CLICK_SLOP: f32 = 6.0;
+
+fn detect_clicks(
     buttons: Res<ButtonInput<MouseButton>>,
     ui: Res<UiHover>,
     window: Query<&Window, With<PrimaryWindow>>,
+    mut clicks: ResMut<Clicks>,
+    mut down: Local<[Option<Vec2>; 2]>,
+) {
+    *clicks = Clicks::default();
+    let Ok(window) = window.single() else { return };
+    let cur = window.cursor_position();
+    for (i, b) in [MouseButton::Left, MouseButton::Right].into_iter().enumerate() {
+        if buttons.just_pressed(b) {
+            down[i] = if ui.0 { None } else { cur };
+        }
+        if buttons.just_released(b) {
+            let clicked = matches!((down[i].take(), cur), (Some(a), Some(c)) if a.distance(c) < CLICK_SLOP);
+            if i == 0 {
+                clicks.left = clicked;
+            } else {
+                clicks.right = clicked;
+            }
+        }
+    }
+}
+
+/// WoW: sol tık düşmanı hedefler, sağ tık hedefler ve otomatik saldırıyı açar.
+fn click_select(
+    clicks: Res<Clicks>,
+    window: Query<&Window, With<PrimaryWindow>>,
     cam: Query<(&Camera, &GlobalTransform), With<OrbitCam>>,
     enemies: Query<(Entity, &Transform, &Enemy), Without<Dying>>,
-    collision: benilla_world::collision::WorldCollision,
     mut target: ResMut<PlayerTarget>,
-    mut move_to: ResMut<MoveTo>,
+    mut auto: ResMut<AutoAttack>,
     stats: Res<PlayerStats>,
 ) {
-    if stats.dead || ui.0 || !buttons.just_pressed(MouseButton::Left) {
+    if stats.dead || !(clicks.left || clicks.right) {
         return;
     }
     let (Ok(window), Ok(cam)) = (window.single(), cam.single()) else {
@@ -181,14 +222,44 @@ fn click_select(
         return;
     };
     if let Some(e) = pick_enemy(&ray, &enemies) {
-        target.0 = Some(e);
-        move_to.0 = None;
+        if target.0 != Some(e) {
+            target.0 = Some(e);
+        }
+        if clicks.right {
+            auto.0 = true;
+        }
+    }
+}
+
+/// Tab: öndeki en yakın düşman (40 m); tekrar basınca sıradakine geçer.
+fn tab_target(
+    keys: Res<ButtonInput<KeyCode>>,
+    player: Query<&Transform, With<Player>>,
+    enemies: Query<(Entity, &Transform, &Enemy), Without<Dying>>,
+    mut target: ResMut<PlayerTarget>,
+    stats: Res<PlayerStats>,
+) {
+    if stats.dead || !keys.just_pressed(KeyCode::Tab) {
         return;
     }
-    // Zemine tıklandı: oraya yürü.
-    if let Some(hit) = collision.ray_body(ray.origin, ray.direction, 250.0) {
-        move_to.0 = Some(ray.origin + *ray.direction * hit.distance);
-        target.0 = None;
+    let Ok(p) = player.single() else { return };
+    let fwd = p.rotation * Vec3::NEG_Z;
+    let mut list: Vec<(f32, Entity)> = enemies
+        .iter()
+        .filter_map(|(e, xf, _)| {
+            let to = xf.translation - p.translation;
+            let d = to.length();
+            // Öndekiler önce: arkadakiler 30 m ceza alır.
+            (d < 40.0).then(|| (d + if to.dot(fwd) < 0.0 { 30.0 } else { 0.0 }, e))
+        })
+        .collect();
+    list.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let next = match target.0.and_then(|t| list.iter().position(|(_, e)| *e == t)) {
+        Some(i) => list.get(i + 1).or(list.first()),
+        None => list.first(),
+    };
+    if let Some((_, e)) = next {
+        target.0 = Some(*e);
     }
 }
 
@@ -212,14 +283,17 @@ pub fn reach(en: &Enemy, scale: f32) -> f32 {
     2.2 + en.radius * scale
 }
 
+/// Saldırı için hedefin önünde olması gereken açı (cos ~80°).
+const FACING_COS: f32 = 0.17;
+
 fn attack_input(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    wow: (ResMut<AutoAttack>, ResMut<GameLog>, Local<f32>),
     derived: Res<Derived>,
     stats: Res<PlayerStats>,
     mut swing: ResMut<Swing>,
     mut target: ResMut<PlayerTarget>,
-    mut player: Query<&mut Transform, With<Player>>,
+    player: Query<&Transform, With<Player>>,
     mut body: Query<&mut AnimState, With<Body>>,
     enemies: Query<(Entity, &Transform, &Enemy, &Health), (Without<Player>, Without<Dying>)>,
     mut hits: MessageWriter<Hit>,
@@ -229,7 +303,7 @@ fn attack_input(
 ) {
     let dt = time.delta_secs();
     swing.cd -= dt;
-    let Ok(mut pxf) = player.single_mut() else {
+    let Ok(pxf) = player.single() else {
         return;
     };
     // Binekteyken saldırı yok (mount::dismount_on_attack attan indirir).
@@ -237,17 +311,38 @@ fn attack_input(
         swing.hit_at = None;
         return;
     }
+    let (mut auto, mut log, mut warn_at) = wow;
     if let Some(t) = target.0 {
         if enemies.get(t).is_err() {
             target.0 = None;
         }
     }
+    if target.0.is_none() {
+        auto.0 = false;
+    }
     let ppos = pxf.translation;
-    // Hedefteyken menzilde olunca otomatik saldırı; Space her zaman saldırır.
-    let in_range_target = target.0.and_then(|t| enemies.get(t).ok()).filter(|(_, xf, en, _)| {
-        xf.translation.distance(ppos) <= reach(en, xf.scale.x) + 0.3
-    });
-    let want = keys.pressed(KeyCode::Space) || in_range_target.is_some();
+    // WoW otomatik saldırı: hedef menzilde ve önündeyse vurur; değilse uyarı (1.5 sn'de bir).
+    let now = time.elapsed_secs();
+    let mut want = false;
+    if let Some((_, xf, en, _)) = target.0.and_then(|t| enemies.get(t).ok()).filter(|_| auto.0) {
+        let to = Vec3::new(xf.translation.x - ppos.x, 0.0, xf.translation.z - ppos.z);
+        let fwd = pxf.rotation * Vec3::NEG_Z;
+        let problem = if to.length() > reach(en, xf.scale.x) + 0.3 {
+            Some("Hedef çok uzak.")
+        } else if to.length() > en.radius + 0.5 && fwd.dot(to.normalize_or_zero()) < FACING_COS {
+            Some("Yanlış yöne bakıyorsun!")
+        } else {
+            None
+        };
+        match problem {
+            None => want = true,
+            Some(m) if swing.cd <= 0.0 && now >= *warn_at => {
+                *warn_at = now + 1.5;
+                log.push(now, C_BAD, m);
+            }
+            _ => {}
+        }
+    }
 
     // Vuruş anı.
     if let Some(at) = swing.hit_at {
@@ -285,21 +380,6 @@ fn attack_input(
         commands.spawn(FloatText { world: p, t: 0.0, text: "Miss".into(), color: Color::srgb(0.9, 0.9, 0.95), big: false });
     }
     if want && swing.cd <= 0.0 && !skill_lock.0 {
-        // En yakın düşmana dön (otomatik nişan).
-        let face = in_range_target.map(|(_, xf, _, _)| xf.translation).or_else(|| {
-            enemies
-                .iter()
-                .map(|(_, xf, en, _)| (xf.translation, xf.translation.distance(ppos) - en.radius))
-                .filter(|(_, d)| *d < 4.0)
-                .min_by(|a, b| a.1.total_cmp(&b.1))
-                .map(|(p, _)| p)
-        });
-        if let Some(p) = face {
-            let d = Vec3::new(p.x - ppos.x, 0.0, p.z - ppos.z);
-            if d.length_squared() > 0.01 {
-                pxf.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, d.normalize());
-            }
-        }
         swing.cd = derived.swing;
         swing.combo = swing.combo.wrapping_add(1);
         swing.hit_at = Some(time.elapsed_secs() + derived.swing * 0.38);
