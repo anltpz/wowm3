@@ -7,8 +7,9 @@ use benilla_assets::WorldAssets;
 use benilla_world::terrain_stream::ViewFocus;
 
 use super::camera::OrbitCam;
-use super::character::{build_body, build_item_model, ArmorSet, CharDb};
-use super::model::{anim, AnimState, ModelReady};
+use super::character::{build_body_full, Appearance, ArmorSet, CharDb};
+use super::equipment::{LookSpec, WantsItems};
+use super::model::{anim, AnimState};
 
 #[derive(Component)]
 pub struct Player {
@@ -29,12 +30,18 @@ pub struct Player {
     pub cur_speed: f32,
 }
 
-/// Oyuncunun giydiği görünüm; `dirty` olunca gövde yeniden kurulur.
+/// Oyuncunun giydiği görünüm (ItemDisplay kimlikleri); `dirty` olunca gövde yeniden kurulur.
+/// Ekipmandan `equipment::sync_look` doldurur (`equipment::look_from_equip`).
 #[derive(Resource)]
 pub struct PlayerLook {
     pub armor: ArmorSet,
     pub weapon: Option<u32>,
+    /// Sol kola takılan kalkan (takma noktası 0).
     pub shield: Option<u32>,
+    /// Kafaya takılan kask (takma noktası 11); saç/kulak geosetlerini gizler.
+    pub helm: Option<u32>,
+    /// Omuzluk (sol 6 = `model[0]`, sağ 5 = `model[1]`).
+    pub shoulder: Option<u32>,
     pub two_hand: bool,
     /// Kuşanılan silahın artısı (parıltı için).
     pub weapon_plus: u8,
@@ -43,32 +50,54 @@ pub struct PlayerLook {
 
 impl Default for PlayerLook {
     fn default() -> Self {
-        Self {
-            // Gümüş Plaka seti (Plate_A_01Silver).
+        // Ekipman okunana kadarki görünüm: Gümüş Plaka seti (Plate_A_01Silver), kısa kılıç, kasksız.
+        Self::from_spec(LookSpec {
             armor: [None, Some(16184), Some(3418), Some(3414), Some(25828), Some(4448), Some(25831), None],
             weapon: Some(1546),
-            shield: None,
-            two_hand: false,
-            weapon_plus: 0,
+            ..LookSpec::default()
+        })
+    }
+}
+
+impl PlayerLook {
+    pub fn from_spec(s: LookSpec) -> Self {
+        Self {
+            armor: s.armor,
+            weapon: s.weapon,
+            shield: s.shield,
+            helm: s.helm,
+            shoulder: s.shoulder,
+            two_hand: s.two_hand,
+            weapon_plus: s.weapon_plus,
             dirty: true,
         }
+    }
+
+    pub fn spec(&self) -> LookSpec {
+        LookSpec {
+            armor: self.armor,
+            weapon: self.weapon,
+            two_hand: self.two_hand,
+            weapon_plus: self.weapon_plus,
+            shield: self.shield,
+            helm: self.helm,
+            shoulder: self.shoulder,
+        }
+    }
+
+    /// Görünüm farklıysa uygular ve gövdeyi yeniden kurdurur; değişti mi.
+    pub fn set_spec(&mut self, s: LookSpec) -> bool {
+        if self.spec() == s {
+            return false;
+        }
+        *self = Self::from_spec(s);
+        true
     }
 }
 
 /// Gövde modeli (oyuncunun çocuğu).
 #[derive(Component)]
 pub struct Body;
-
-/// Gövde hazır olunca takılacak eşyalar.
-#[derive(Component)]
-struct WantsItems {
-    weapon: Option<u32>,
-    shield: Option<u32>,
-}
-
-/// Elde tutulan eşya modeli.
-#[derive(Component)]
-pub struct HeldItem;
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<PlayerLook>()
@@ -77,7 +106,7 @@ pub fn plugin(app: &mut App) {
             Update,
             move_player.in_set(benilla_world::schedule::WorldStage::Input),
         )
-        .add_systems(Update, (rebuild_look, attach_items, animate_player));
+        .add_systems(Update, (rebuild_look, animate_player));
 }
 
 fn spawn_player(mut commands: Commands) {
@@ -115,7 +144,10 @@ fn spawn_player(mut commands: Commands) {
     });
 }
 
-fn rebuild_look(
+/// Görünüm değişince gövdeyi yeniden kurar. Yeni gövde eskisinin ebeveynini ve `Transform`'unu
+/// devralır: binekteyken atın binici eklemine doğrudan oturur (eskiden 1 kare oyuncunun ayağında
+/// belirip `mount::seat_rider` ile taşınıyordu → titreme).
+pub(crate) fn rebuild_look(
     mut commands: Commands,
     mut look: ResMut<PlayerLook>,
     db: Option<Res<CharDb>>,
@@ -123,7 +155,7 @@ fn rebuild_look(
     mut images: ResMut<Assets<Image>>,
     server: Res<AssetServer>,
     player: Query<Entity, With<Player>>,
-    bodies: Query<(Entity, Option<&AnimState>), With<Body>>,
+    bodies: Query<(Entity, Option<&AnimState>, Option<&ChildOf>, &Transform), With<Body>>,
 ) {
     if !look.dirty {
         return;
@@ -132,61 +164,30 @@ fn rebuild_look(
         return;
     };
     let mut anim_state = AnimState::default();
-    for (e, st) in &bodies {
+    let mut parent = p;
+    let mut xf = Transform::default();
+    for (e, st, child_of, bxf) in &bodies {
         if let Some(st) = st {
             anim_state.idle = st.idle;
             anim_state.want = st.idle;
         }
+        if let Some(c) = child_of {
+            parent = c.parent();
+            xf = *bxf;
+        }
         commands.entity(e).despawn();
     }
-    let wm = build_body(&db, wa, &mut images, &server, &look.armor);
+    let wm = build_body_full(&db, wa, &mut images, &server, &look.armor, &Appearance::PLAYER, look.helm);
     commands.spawn((
         wm,
         anim_state,
         Body,
-        WantsItems {
-            weapon: look.weapon,
-            shield: look.shield,
-        },
-        Transform::default(),
+        WantsItems(look.spec()),
+        xf,
         Visibility::default(),
-        ChildOf(p),
+        ChildOf(parent),
     ));
     look.dirty = false;
-}
-
-fn attach_items(
-    mut commands: Commands,
-    db: Option<Res<CharDb>>,
-    mut wa: Option<ResMut<WorldAssets>>,
-    mut images: ResMut<Assets<Image>>,
-    server: Res<AssetServer>,
-    q: Query<(Entity, &ModelReady, &WantsItems), With<Body>>,
-) {
-    let (Some(db), Some(wa)) = (db, wa.as_deref_mut()) else {
-        return;
-    };
-    for (e, ready, want) in &q {
-        // 1 = sağ el, 2 = sol el, 0 = kalkan (kol).
-        let slots = [(want.weapon, 1u16, "Weapon"), (want.shield, 0u16, "Shield")];
-        for (display, attach, dir) in slots {
-            let Some(display) = display else { continue };
-            let Some((joint, offset)) = ready.attachment(attach) else {
-                warn!("player: takma noktası {attach} yok");
-                continue;
-            };
-            if let Some(wm) = build_item_model(&db, wa, &mut images, &server, display, dir) {
-                commands.spawn((
-                    wm,
-                    HeldItem,
-                    Transform::from_translation(offset),
-                    Visibility::default(),
-                    ChildOf(joint),
-                ));
-            }
-        }
-        commands.entity(e).remove::<WantsItems>();
-    }
 }
 
 pub fn ground_at(collision: &benilla_world::collision::WorldCollision, at: Vec3) -> Option<f32> {

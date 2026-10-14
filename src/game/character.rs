@@ -121,9 +121,24 @@ pub fn build_body_as(
     armor: &ArmorSet,
     look: &Appearance,
 ) -> WowModel {
+    build_body_full(db, wa, images, server, armor, look, None)
+}
+
+/// Gövde + kask: `helm` (ItemDisplay) verilirse kaskın `HelmetGeosetVisData` maskesi saç, sakal ve
+/// kulak geosetlerini gizler (saç kaskın içinden çıkmaz). Kask modelinin kendisi takma noktası
+/// 11'e ayrıca takılır (`equipment::attach_items`).
+pub fn build_body_full(
+    db: &CharDb,
+    wa: &mut WorldAssets,
+    images: &mut Assets<Image>,
+    server: &AssetServer,
+    armor: &ArmorSet,
+    look: &Appearance,
+    helm: Option<u32>,
+) -> WowModel {
     let sex = look.sex();
     let equipment: [Option<&ItemDisplay>; 8] =
-        std::array::from_fn(|i| armor[i].and_then(|id| db.items.get(id)));
+        std::array::from_fn(|i| armor[i].and_then(|id| display_or_warn(db, id, "gövde")));
     let atlas = {
         let mut chain = wa.chain.lock_recover();
         db.sections.composite_body(
@@ -161,7 +176,9 @@ pub fn build_body_as(
     let eq = EquipGeosets {
         bodyslots,
         cloak: None,
-        helm_vis: None,
+        helm_vis: helm
+            .and_then(|h| display_or_warn(db, h, "kask"))
+            .and_then(ItemDisplay::worn_helm_vis),
         forearm_dressed: forearm_dressed(&equipment),
         tabard_preview: false,
     };
@@ -177,6 +194,25 @@ pub fn build_body_as(
     wm
 }
 
+/// ItemDisplay satırı; yoksa kimlik başına bir kez `warn!` (geçersiz kimlik eskiden sessizce çıplak
+/// görünüm verirdi).
+pub fn display_or_warn<'a>(db: &'a CharDb, id: u32, what: &str) -> Option<&'a ItemDisplay> {
+    let d = db.items.get(id);
+    if d.is_none() {
+        use std::sync::{Mutex, OnceLock};
+        static WARNED: OnceLock<Mutex<std::collections::HashSet<u32>>> = OnceLock::new();
+        let first = WARNED
+            .get_or_init(Default::default)
+            .lock()
+            .map(|mut w| w.insert(id))
+            .unwrap_or(false);
+        if first {
+            warn!("character: ItemDisplay {id} ({what}) DBC'de yok, karakterde görünmeyecek");
+        }
+    }
+    d
+}
+
 /// Silah (veya kalkan) modeli: ItemDisplayInfo satırından yol + doku.
 pub fn build_item_model(
     db: &CharDb,
@@ -186,12 +222,31 @@ pub fn build_item_model(
     display: u32,
     dir: &str,
 ) -> Option<WowModel> {
-    let d = db.items.get(display)?;
-    let model = d.model[0].as_deref()?;
-    let base = model.rsplit(['\\', '/']).next().unwrap_or(model);
-    let path = format!("Item/ObjectComponents/{dir}/{base}");
-    let mut wm = WowModel::new(load_m2(server, &path));
-    if let Some(tex) = d.model_texture[0].as_deref() {
+    build_item_model_at(db, wa, images, server, display, dir, 0, None)
+}
+
+/// Eşya modeli: `dir` klasörü (`Weapon`, `Shield`, `Head`, `Shoulder`), `col` model/doku sütunu
+/// (omuzluk: 0 = sol, 1 = sağ), `helm_suffix` kask ırk+cinsiyet eki (`HuM` → `Head/{stem}_HuM.m2`).
+/// Benilla `ensure_item_model` ile aynı kural; doku satırın kendi sütunundan, modelden türetilmez.
+#[allow(clippy::too_many_arguments)]
+pub fn build_item_model_at(
+    db: &CharDb,
+    wa: &mut WorldAssets,
+    images: &mut Assets<Image>,
+    server: &AssetServer,
+    display: u32,
+    dir: &str,
+    col: usize,
+    helm_suffix: Option<&str>,
+) -> Option<WowModel> {
+    let d = display_or_warn(db, display, dir)?;
+    let Some(model) = d.model.get(col).and_then(|m| m.as_deref()) else {
+        let id = display;
+        warn!("character: ItemDisplay {id} ({dir}) {col}. sütunda model yok");
+        return None;
+    };
+    let mut wm = WowModel::new(load_m2(server, &item_model_path(dir, model, helm_suffix)));
+    if let Some(tex) = d.model_texture.get(col).and_then(|t| t.as_deref()) {
         wm.object = wa.texture(
             &format!("Item\\ObjectComponents\\{dir}\\{tex}.blp"),
             (true, true),
@@ -201,7 +256,56 @@ pub fn build_item_model(
     Some(wm)
 }
 
+/// `Item/ObjectComponents/{dir}/{model}`; kask için `{stem}_{ek}.m2`.
+pub fn item_model_path(dir: &str, model: &str, helm_suffix: Option<&str>) -> String {
+    let base = model.rsplit(['\\', '/']).next().unwrap_or(model);
+    match helm_suffix {
+        Some(sfx) => {
+            let lower = base.to_ascii_lowercase();
+            let stem = if lower.ends_with(".m2") {
+                &base[..base.len() - 3]
+            } else if lower.ends_with(".mdx") {
+                &base[..base.len() - 4]
+            } else {
+                base
+            };
+            format!("Item/ObjectComponents/{dir}/{stem}_{sfx}.m2")
+        }
+        None => format!("Item/ObjectComponents/{dir}/{base}"),
+    }
+}
+
+/// Kask modeli eki: İnsan erkek `HuM`, kadın `HuF` (benilla `RACE_PREFIX`).
+pub fn helm_suffix(female: bool) -> &'static str {
+    if female {
+        "HuF"
+    } else {
+        "HuM"
+    }
+}
+
 /// Bir ItemDisplay'in envanter ikonunun yolu (`Interface\Icons\X.blp`).
 pub fn icon_path(db: &CharDb, display: u32) -> Option<String> {
     db.items.get(display)?.icon.as_ref().map(|i| format!("{i}.blp"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_model_paths() {
+        assert_eq!(
+            item_model_path("Weapon", "Sword_1H_Short_A_01.m2", None),
+            "Item/ObjectComponents/Weapon/Sword_1H_Short_A_01.m2"
+        );
+        assert_eq!(
+            item_model_path("Head", "Helm_Plate_D_03.m2", Some(helm_suffix(false))),
+            "Item/ObjectComponents/Head/Helm_Plate_D_03_HuM.m2"
+        );
+        assert_eq!(
+            item_model_path("Head", "Item\\ObjectComponents\\Head\\helm_mail_a_02.M2", Some(helm_suffix(true))),
+            "Item/ObjectComponents/Head/helm_mail_a_02_HuF.m2"
+        );
+    }
 }

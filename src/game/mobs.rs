@@ -246,8 +246,9 @@ pub(crate) const GNOLL_RP: &str = "Creature/Gnoll/RiverPawGnollWhelpSkin.blp";
 pub(crate) const GNOLL_HOGGER: &str = "Creature/GnollMelee/RiverPawGnollFighterSkin.blp";
 
 pub(crate) type Set = super::character::ArmorSet;
-/// Defias deri takımı (Leather_A_03DefiasBrown: göğüs, kemer, pantolon, çizme).
-pub(crate) const DEFIAS: Set = [None, Some(8550), Some(8551), Some(8552), Some(8553), None, None, None];
+/// Defias deri takımı (göğüs, kemer, pantolon, çizme). Leather_A_03DefiasBrown dokuları MPQ'da yok
+/// (Q-06) → aynı kesimin kahverengisi Leather_A_03Brown.
+pub(crate) const DEFIAS: Set = [None, Some(3719), Some(4473), Some(4469), Some(9773), None, None, None];
 /// Beyaz Yeminli zırh setleri (gömlek, göğüs, kemer, pantolon, çizme, bileklik, eldiven, tabard).
 pub(crate) const OATH_SOLDIER: Set = [None, Some(16184), Some(3418), Some(3414), Some(25828), Some(4448), Some(25831), None];
 pub(crate) const OATH_ARCHER: Set = [None, Some(2183), None, Some(1882), Some(2198), None, None, None];
@@ -409,6 +410,11 @@ pub fn open_ground(
     ref_y: f32,
     max_dy: f32,
 ) -> Option<Vec3> {
+    // Zindan (iç mekân): arazi yok, yalnızca WMO zemini (noktanın hemen üstünden aşağı ışın; tavan değil).
+    if super::physics::indoor() {
+        let g = super::physics::ground_at(col, p)?;
+        return ((g - ref_y).abs() <= max_dy).then(|| Vec3::new(p.x, g, p.z));
+    }
     if let Some(d) = super::terrain::data() {
         let _ = (ref_y, max_dy);
         let m = d.to_map(p);

@@ -10,7 +10,8 @@
 //! - Görünüm: wiki'deki oyun içi görsellerle WoW modelleri yan yana (geçici silah galerisi) karşılaştırılarak
 //!   seçildi; hepsinin modeli + dokusu MPQ'da var. `Sword_1H_Fire_A_01` (eski 4908 "Zehir") KULLANILMAZ:
 //!   alev ağzı parçacık olduğu için bizim çizicide yalnızca kabza görünüyor.
-//! - vnum aralığı 19000-19999 (tek el 190x0, iki el 195x0); `items::ITEMS` ile çakışmaz.
+//! - vnum aralığı 19000-19999 (tek el 190x0, iki el 195x0); `items::ITEMS` ile çakışmaz. Zindan biletleri ve
+//!   anahtarları (G-26) 71000+ aralığında.
 //!
 //! `items::ITEM_TABLES` bu tabloyu zaten içerir: `items::def(vnum)`, düşürme havuzu (`gear_for_level`) ve
 //! testler (vnum benzersizliği, MPQ ikon denetimi) buradaki satırları da kapsar. Yeni eşyalar yalnızca buraya
@@ -60,6 +61,14 @@ pub const V_KARA_EJDERHA_BICAGI: u32 = 19530;
 /// Yılan Büyük Kılıcı (Metin2 Sv120).
 pub const V_YILAN_BUYUK: u32 = 19540;
 
+// --- Zindan giriş biletleri ve anahtarları (G-26; 71000+ aralığı zindanlara ayrıldı) ---
+/// Örümcek Zindanı giriş bileti (girişte 1 adet tüketilir; rehber satar).
+pub const V_TICKET_SPIDER: u32 = 71000;
+/// Şeytan Kulesi giriş bileti.
+pub const V_TICKET_TOWER: u32 = 71001;
+/// Şeytan Kulesi mühür anahtarı (anahtar katında taşıyıcılardan düşer, kat bitince tüketilir).
+pub const V_TOWER_KEY: u32 = 71002;
+
 /// Yalnızca bosslardan düşmesi önerilen silahlar. `items::gear_for_level` şu an bütün tabloları
 /// süzmeden kullanıyor (metin taşları da bunları düşürebilir); süzgeç gerekirse bu liste kullanılır.
 #[allow(dead_code)] // G-28/G-29 düşürme tabloları ve olası `gear_for_level` süzgeci için
@@ -95,6 +104,10 @@ pub const ITEMS_METIN2: &[ItemDef] = &[
     weapon(V_KIN, "Kin Kılıcı", "INV_Sword_53", 25, (84, 112), 12, 34304, true, 11000), // Sword_2H_AhnQiraj_D_02 — kızıl-kahve süslü ağız
     weapon(V_KARA_EJDERHA_BICAGI, "Kara Ejderha Bıçağı", "INV_Sword_50", 32, (96, 126), 13, 32000, true, 22000), // Sword_2H_Blackwing_A_02 — koyu ağız, ejder başlı balçak
     weapon(V_YILAN_BUYUK, "Yılan Büyük Kılıcı", "INV_Sword_56", 40, (136, 174), 17, 33882, true, 45000), // Sword_2H_AhnQiraj_D_01Green — siyah-yeşil, dikenli dev ağız
+    // Zindan biletleri / anahtarları (G-26).
+    misc(V_TICKET_SPIDER, "Örümcek Zindanı Bileti", "INV_Misc_Note_02", Kind::Material, 20, 500),
+    misc(V_TICKET_TOWER, "Şeytan Kulesi Bileti", "INV_Misc_Note_04", Kind::Material, 20, 2_500),
+    misc(V_TOWER_KEY, "Kule Mühür Anahtarı", "INV_Misc_Key_03", Kind::Material, 1, 0),
 ];
 
 #[cfg(test)]
@@ -105,8 +118,10 @@ mod tests {
     fn catalog_sane() {
         let mut last = [0u32; 2];
         for d in ITEMS_METIN2 {
+            // Silah dışı satırlar (zindan biletleri/anahtarları, G-26) 71000+ aralığında.
             let Kind::Weapon { dmg, two_hand, per_plus, .. } = d.kind else {
-                panic!("{}: yalnızca silah beklenir", d.name);
+                assert!((71000..72000).contains(&d.vnum), "{}: silah değil ve zindan aralığında değil", d.name);
+                continue;
             };
             assert!((19000..20000).contains(&d.vnum), "{} vnum aralık dışı", d.name);
             assert!((1..=40).contains(&d.level), "{} seviyesi 1-40 dışında", d.name);

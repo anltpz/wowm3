@@ -60,7 +60,7 @@ fn spawn_camera(mut commands: Commands, msaa: Res<benilla_world::view::MsaaSetti
 /// WoW kamerası: sol tık sürükle = yalnızca kamera döner (serbest bakış), sağ tık sürükle = kamera ve
 /// karakter birlikte döner (yönlendirme). Fare bırakılıp yürüyünce kamera yavaşça karakterin arkasına
 /// döner. Bir UI penceresinin üstünde başlayan sürükleme kamerayı çevirmez.
-fn orbit(
+pub fn orbit(
     time: Res<Time>,
     buttons: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
@@ -111,7 +111,9 @@ fn orbit(
     let back = rot * Vec3::Z;
     // Kamera kolu duvara/araziye çarparsa kısalt.
     let mut d = cam.dist;
-    if super::terrain::data().is_none() {
+    // Zindan (iç mekân) ya da orijinal harita: dünya çarpışması (WMO duvarı/tavanı kamerayı keser).
+    let indoor = super::physics::indoor();
+    if indoor || super::terrain::data().is_none() {
         if let Some(hit) = collision.cast_camera(target, back * cam.dist, false) {
             d = (hit - 0.2).max(1.0);
         }
@@ -120,7 +122,7 @@ fn orbit(
         d = (hit - 0.3).max(1.0);
     }
     xf.translation = target + back * d;
-    if let Some(g) = super::terrain::ground(xf.translation) {
+    if let Some(g) = super::terrain::ground(xf.translation).filter(|_| !indoor) {
         xf.translation.y = xf.translation.y.max(g + 0.6);
     }
     xf.look_at(target, Vec3::Y);
