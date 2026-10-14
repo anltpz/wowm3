@@ -247,3 +247,63 @@ Kaçınılacak: 33677 (`helm_plate_raidwarrior_b.m2` yok), 12872 (`helm_plate_a_
 | Dolunay Kılıcı (2H) | 2416 claymore_b_02 White | 21194 2h_horde_c_03 Blue, 5057 2h_katana_b_01 Blue |
 | Ejderha Kılıcı (2H) | 3758 claymore_b_02 Gold | 23259 2h_horde_d_01, 34112 2h_epic_a_03, 29098 2h_ashbringer_a_01 Blue, 35255/35256 2h_stratholme_d |
 | Diğer 2H (Metin2 hissi) | — | 729 2h_korean_c_01, 9037 2h_korean_a_01, 9121 2h_katana_b_02 Black |
+
+---
+
+## Q-08 — Dalga 1 QA: ekipman görünümü + Westfall (2026-10-14, dal `test/dalga1`)
+
+- **Test eden:** qa-engineer (Q-08)
+- **Commit:** `main` @ `eda1876` (#5 Q-06, #6 G-24, #7 G-25, #8 G-26, #9 D-21, #10 G-27 birleşik)
+- **Ortam:** Sprint 1 raporundakiyle aynı (DX12, 1600×900, `--release`)
+- **Ekran görüntüleri:** `C:\Users\ANIL\AppData\Local\Temp\claude\C--Users-ANIL\aab144fc-ff3e-4967-983a-b5dfac098313\scratchpad\qa8\`
+  (`.png` ve aynı adlı `.log`). Klasör oturuma özel; görüntülerde WoW assetleri olduğu için depoya konmadı.
+
+### Genel sonuç: **GEÇTİ** (engelleyici hata yok)
+
+### 1. Derleme ve testler
+| Komut | Sonuç |
+|---|---|
+| `cargo build --release` | Temiz, 6 uyarı. Hepsi önceki sprintlerden; Dalga 1 yeni uyarı eklemedi. |
+| `cargo test --release` | **74/74** geçti (3 `#[ignore]`). |
+| `cargo test --release -- --ignored display_audit` | **2/2** geçti. D-21 silahları ve G-25 kask/kalkan/omuzluk dahil bütün ItemDisplay kimlikleri MPQ'da var. |
+
+### 2. Ekipman (G-25)
+Ortam: `AZM_EQUIP=11220,12210,13010,15010,14010`.
+| Dosya | Ortam | Görülen |
+|---|---|---|
+| `e5_yakin.png` | `AZM_YAW=3.14;AZM_DIST=2.2;AZM_PITCH=-0.15` | Önden yakın çekim. Kırmızı siperlikli kask kafada, saç ve kulak görünmüyor. Might omuzlukları iki omuzda, dikenli kalkan sol kolda, kılıç sağ elde. Set dokuları (göğüs, kemer, bileklik, çizme) doğru. |
+| `e1_onden.png` | `AZM_YAW=3.14;AZM_DIST=4` | Aynı görünüm, uzaktan. Envanterde kuşanılan yuvalar dolu. |
+| `e2_arkadan.png` | `AZM_DIST=4` | Arkadan: omuzluk dikenleri, kaskın arkası, kalkanın sırtı. Kopuk ya da yüzen parça yok. |
+| `e3_binek_onden.png`, `e4_binek_yan.png` | `AZM_RIDE=1` | Ölüm atının üstünde kask, omuzluk ve kalkan doğru yerde, gövde eyerde. Yan çekimde isim plakası kask boynuzlarına biniyor (bkz. Q8-3). |
+
+Binekteyken eşya değiştirince 1 karelik titreme düzeltmesi (K8) yalnızca kod okunarak doğrulandı (`player.rs` `rebuild_look`, eski `ChildOf` ve `Transform` devrediliyor). Otomatik testte binekteyken eşya değiştirme girdisi yok.
+
+### 3. Westfall (G-27)
+| Dosya | Ortam | Görülen |
+|---|---|---|
+| `w1_jansen_auto.png` | `AZM_FOCUS=-9850,1000,33;AZM_AUTO=1` + ekipman, 45 sn | Otopilot Jansen Stead sürüleriyle savaştı, oyuncu Sv1'den **Sv6**'ya çıktı. Mini harita "The Jansen Stead". Çiftlik tarlası ve korkuluk doodad'ları var. |
+| `w3_saldean.png` | `AZM_FOCUS=-10150,1070,37` | "Saldean's Farm". İki katlı ev (WMO) yerinde, **Salma Saldean `<Breadbasket Loncası>`** plakası var, mini haritada sürüler görünüyor. |
+| `w4_dustplains.png` | `AZM_FOCUS=-11100,860,42` | "The Dust Plains". **Hırs Metni (Sv20)** ve can çubuğu görünüyor. Mavi gövdeli Westfall ağaçları doğru. |
+| `w5_jangolode.png` | `AZM_FOCUS=-9940,1430,42` | "Jangolode Mine". Oyuncu tepe yamacında, mini haritada sürüler var. |
+| `w2_longshore.png` | `AZM_FOCUS=-9720,1270,14` | Kuzey sahil, kum ve su geçişi. Mini haritada murloc sürüleri var. Alt bölge adı "Westfall" görünüyor (bkz. Q8-2). |
+
+- Hiçbir çalıştırmada `panic` ya da `B0001` yok.
+- Satır denetimi (`python -I tools/adt_zones.py check src/game/westfall.rs`) 0 uyarı verdi: sürü, metin ve NPC satırlarının hiçbiri suda ya da yanlış bina üstünde değil.
+
+### 4. Bulunan sorunlar
+| # | Önem | Sorun | Sahip önerisi |
+|---|---|---|---|
+| Q8-1 | Orta | **Moonbrook ve Westfall çiftlik binaları MPQ'da yok.** `moonbrook_inn/blacksmith/townhall_nowall/humantwostory`, `westfall_human_farm`, `westfall_barn`, `westfall_lumbermill`, `westfall_stable`, `prisonlonghouse`, `az_deadmines_a/c` → benilla `failed to load: nothing spawned`. `tools/mpq_present.txt` doğruluyor (yalnızca `Moonbrook_human_farm` ve `Westfall_human_farm_Burnt` var). Moonbrook'un Defias sürüleri boş bir meydanda duruyor. Kod hatası değil, veri paketi kısıtı. | designer + gameplay-dev: eksik yerleşimleri MPQ'da olan benzer WMO'larla değiştiren bir eşleme (ör. `Westfall_human_farm_Burnt`, `Moonbrook_human_farm`, Elwynn binaları), ya da Moonbrook sürülerini binası olan bir yere taşımak. Sprint 6 adayı. |
+| Q8-2 | Düşük | Kuzey sahildeki murloc köyü (-9690, 1280) "Longshore" çemberinin dışında kalıyor, mini harita "Westfall" yazıyor. Çemberler %88 isabetli; sahil şeridi tek çemberle iyi örtülmüyor. | gameplay-dev: `SUBZONES`'a bir Longshore çemberi daha (ör. -9690, 1200, 110). |
+| Q8-3 | Düşük | Binekteyken isim plakası boynuzlu kaskın üstüne biniyor (Sprint 2'den kalan "binekteyken plaka yüksekliği" maddesi). | designer: binekteyken plakayı yaklaşık 0.6 m yükseltmek. |
+| Q8-4 | Düşük | Westfall'un bazı doodad'ları (çeşme, cenaze arabası, tabelalar, Darkshore kütükleri) MPQ'da yok, log'da `Path not found` görünüyor. Zararsız. | — |
+
+### 5. Kabul kriterleri
+| Kriter | Sonuç |
+|---|---|
+| G-25: Kask kafada ve saç görünmüyor; kalkan kolda; omuzluk görünüyor (önden, arkadan, binekte) | **GEÇTİ** |
+| G-25: Geçersiz display kimliği yok | **GEÇTİ** (display_audit) |
+| G-27: Alt bölge adları doğru | **GEÇTİ** (Q8-2 dışında) |
+| G-27: Yaratıklar suda ya da çatıda değil | **GEÇTİ** (adt_zones check, 0 uyarı) |
+| G-27: Metin alanları ve Westfall dalgaları | **GEÇTİ** (Hırs Metni, Dust Plains) |
+| Log: `panic` / `B0001` yok | **GEÇTİ** |
