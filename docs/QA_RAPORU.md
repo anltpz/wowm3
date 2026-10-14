@@ -294,8 +294,8 @@ Binekteyken eşya değiştirince 1 karelik titreme düzeltmesi (K8) yalnızca ko
 | # | Önem | Sorun | Sahip önerisi |
 |---|---|---|---|
 | Q8-1 | Orta | **Moonbrook ve Westfall çiftlik binaları MPQ'da yok.** `moonbrook_inn/blacksmith/townhall_nowall/humantwostory`, `westfall_human_farm`, `westfall_barn`, `westfall_lumbermill`, `westfall_stable`, `prisonlonghouse`, `az_deadmines_a/c` → benilla `failed to load: nothing spawned`. `tools/mpq_present.txt` doğruluyor (yalnızca `Moonbrook_human_farm` ve `Westfall_human_farm_Burnt` var). Moonbrook'un Defias sürüleri boş bir meydanda duruyor. Kod hatası değil, veri paketi kısıtı. | designer + gameplay-dev: eksik yerleşimleri MPQ'da olan benzer WMO'larla değiştiren bir eşleme (ör. `Westfall_human_farm_Burnt`, `Moonbrook_human_farm`, Elwynn binaları), ya da Moonbrook sürülerini binası olan bir yere taşımak. Sprint 6 adayı. |
-| Q8-2 | Düşük | Kuzey sahildeki murloc köyü (-9690, 1280) "Longshore" çemberinin dışında kalıyor, mini harita "Westfall" yazıyor. Çemberler %88 isabetli; sahil şeridi tek çemberle iyi örtülmüyor. | gameplay-dev: `SUBZONES`'a bir Longshore çemberi daha (ör. -9690, 1200, 110). |
-| Q8-3 | Düşük | Binekteyken isim plakası boynuzlu kaskın üstüne biniyor (Sprint 2'den kalan "binekteyken plaka yüksekliği" maddesi). | designer: binekteyken plakayı yaklaşık 0.6 m yükseltmek. |
+| Q8-2 | Düşük | Kuzey sahildeki murloc köyü (-9690, 1280) "Longshore" çemberinin dışında kalıyor, mini harita "Westfall" yazıyor. Çemberler %88 isabetli; sahil şeridi tek çemberle iyi örtülmüyor. | **DÜZELTİLDİ** (bu dal): ADT probe'una göre iki küçük çember eklendi (-9670, 1250 / 1120, r 70; daha büyüğü x -9750'deki Furlbrow'a taşıyordu) + test. `w6_longshore_duzeltme.png`: mini harita "Longshore", murloc'lar ve Old Murk-Eye (Sv20) sahilde. |
+| Q8-3 | Düşük | Binekteyken isim plakası boynuzlu kaskın üstüne biniyor (Sprint 2'den kalan "binekteyken plaka yüksekliği" maddesi). | **DÜZELTİLDİ** (bu dal): `world_ui.rs` binekli plaka yüksekliği 3.2 → 3.6 m. `e6_binek_yan_duzeltme.png`: plaka boynuzların üstünde. |
 | Q8-4 | Düşük | Westfall'un bazı doodad'ları (çeşme, cenaze arabası, tabelalar, Darkshore kütükleri) MPQ'da yok, log'da `Path not found` görünüyor. Zararsız. | — |
 
 ### 5. Kabul kriterleri
@@ -303,7 +303,7 @@ Binekteyken eşya değiştirince 1 karelik titreme düzeltmesi (K8) yalnızca ko
 |---|---|
 | G-25: Kask kafada ve saç görünmüyor; kalkan kolda; omuzluk görünüyor (önden, arkadan, binekte) | **GEÇTİ** |
 | G-25: Geçersiz display kimliği yok | **GEÇTİ** (display_audit) |
-| G-27: Alt bölge adları doğru | **GEÇTİ** (Q8-2 dışında) |
+| G-27: Alt bölge adları doğru | **GEÇTİ** (Q8-2 düzeltildi) |
 | G-27: Yaratıklar suda ya da çatıda değil | **GEÇTİ** (adt_zones check, 0 uyarı) |
 | G-27: Metin alanları ve Westfall dalgaları | **GEÇTİ** (Hırs Metni, Dust Plains) |
 | Log: `panic` / `B0001` yok | **GEÇTİ** |
