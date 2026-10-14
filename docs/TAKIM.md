@@ -4,7 +4,7 @@ Vizyon: **Metin2 uyarlaması bir WoW oyunu.** Oynanış, harita ve sistemler Met
 envanter, artı basma, NPC'ler, düşürmeler); görsel dil ve oyun içi tasarım World of Warcraft 1.12 gibi
 (WoW modelleri, dokuları, UI çerçeveleri, ikonları, efektleri).
 
-## Roller (4 kişi)
+## Roller
 
 | Rol | Ajan | Sahip olduğu alanlar |
 |---|---|---|
@@ -12,10 +12,12 @@ envanter, artı basma, NPC'ler, düşürmeler); görsel dil ve oyun içi tasarı
 | Tasarımcı | `designer` | Görseller: `src/game/ui/**`, `terrain.wgsl`, efektler (`skills.rs` görsel kısmı, parıltılar), model/doku seçimi, köy yerleşimi görünümü |
 | Oyun Geliştirici | `gameplay-dev` | Sistemler: `items.rs`, `mobs.rs`, `metin.rs`, `loot.rs`, `npc.rs`, `quest.rs`, `stats.rs`, `combat.rs`, `skills.rs` mantığı, kayıt/yükleme |
 | Test / QA | `qa-engineer` | Derleme, birim testleri, `tools/shot.ps1` ile ekran görüntüsü doğrulaması, hata raporu `docs/QA_RAPORU.md` |
+| Sürüm Yöneticisi | `release-manager` | GitHub (anltpz/wowm3): sprint dalını iter, PR açar/günceller (ne yapıldı, düzeltmeler, QA) |
 
 Akış (her sprint): PM backlog'dan sprint planı yazar → orkestratör (ana Claude oturumu) görevleri ilgili
 ajanlara verir → ajanlar ayrı git worktree'lerde çalışır ve commit eder → orkestratör birleştirir →
-QA derler, test eder, ekran görüntüsü alır → PM sprinti kapatır, `PROJE_DURUMU.md`'yi günceller.
+QA derler, test eder, ekran görüntüsü alır → Sürüm Yöneticisi `sprint-<n>` dalını GitHub'a iter ve `main`'e PR açar →
+PM sprinti kapatır, `PROJE_DURUMU.md`'yi günceller. PR'ı birleştirme kararı kullanıcının.
 
 ## Ortak kurallar
 - Önce `PROJE_DURUMU.md`'yi oku. Belgeler ve kod yorumları **Türkçe**.
